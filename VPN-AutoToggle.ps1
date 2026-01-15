@@ -36,8 +36,8 @@
 
 [CmdletBinding()]
 param(
-    [Parameter(Mandatory=$true, HelpMessage="Enter the VPN connection name")]
-    [string]$VpnName,
+    [Parameter(Mandatory=$false, HelpMessage="Enter the VPN connection name")]
+    [string]$VpnName = "",
     
     [Parameter(Mandatory=$false)]
     [string]$Username = "",
@@ -58,6 +58,23 @@ param(
 # Global variables
 $script:ShouldStop = $false
 $script:CurrentState = "Disconnected"
+# Early exit if VPN name not provided
+if (-not $VpnName) {
+    Write-Host "VPN name is required. Available VPN connections:" -ForegroundColor Yellow
+    try {
+        $connections = Get-VpnConnection -ErrorAction Stop
+        if ($connections.Count -gt 0) {
+            $connections | ForEach-Object { Write-Host "  - $($_.Name) [$($_.ConnectionStatus)]" -ForegroundColor Gray }
+        }
+        else {
+            Write-Host "  (No VPN connections found)" -ForegroundColor Gray
+        }
+    }
+    catch {
+        Write-Host "  (Unable to list VPN connections: $($_.Exception.Message))" -ForegroundColor Red
+    }
+    return
+}
 
 #region Helper Functions
 
