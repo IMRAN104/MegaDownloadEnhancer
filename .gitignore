@@ -1,0 +1,15 @@
+# Logs
+*.log
+
+# Temporary files
+*.tmp
+*.swp
+*~
+
+# IDE/Editor
+.vscode/
+.idea/
+
+# OS generated files
+thumbs.db
+desktop.ini
