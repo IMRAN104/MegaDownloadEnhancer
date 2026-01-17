@@ -58,7 +58,7 @@ namespace VPNManager.Forms
         public SettingsForm(AppSettings settings)
         {
             _settings = settings;
-            _vpnService = new VpnService();
+            _vpnService = new VpnService(settings);
 
             InitializeComponent();
             LoadSettings();
@@ -420,9 +420,8 @@ namespace VPNManager.Forms
             {
                 cmbVpnName.Items.Clear();
 
-                // Add WARP options at the top
+                // Add CloudflareWARP as the primary WARP option
                 cmbVpnName.Items.Add("CloudflareWARP");
-                cmbVpnName.Items.Add("WARP");
 
                 // Add Windows VPN connections
                 var vpns = _vpnService.GetAvailableVpns();

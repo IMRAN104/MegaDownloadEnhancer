@@ -47,7 +47,7 @@ namespace VPNManager.Forms
         public MainForm()
         {
             _settings = AppSettings.Load();
-            _vpnService = new VpnService();
+            _vpnService = new VpnService(_settings);
             _megaService = new MegaService(_settings);
 
             InitializeComponent();
