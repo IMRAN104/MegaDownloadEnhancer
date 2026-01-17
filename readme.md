@@ -1,6 +1,25 @@
 # VPN Auto-Toggle Script
 
+[![Build Status](https://github.com/IMRAN104/MegaDownloadEnhancer/actions/workflows/build-test.yml/badge.svg)](https://github.com/IMRAN104/MegaDownloadEnhancer/actions/workflows/build-test.yml)
+[![Latest Release](https://img.shields.io/github/v/release/IMRAN104/MegaDownloadEnhancer)](https://github.com/IMRAN104/MegaDownloadEnhancer/releases/latest)
+[![Downloads](https://img.shields.io/github/downloads/IMRAN104/MegaDownloadEnhancer/total)](https://github.com/IMRAN104/MegaDownloadEnhancer/releases)
+
 Automated VPN connection toggler that cycles your VPN on and off at regular intervals. Perfect for scenarios requiring periodic IP rotation or VPN connection management.
+
+## 📥 Download
+
+**Latest Release:** [VPN Manager v1.2.0](https://github.com/IMRAN104/MegaDownloadEnhancer/releases/latest)
+
+Download the Windows application with GUI or use the PowerShell script directly:
+
+- **Windows App (Recommended):** Download `VPNManager-v1.2.0-win-x64.zip` from [Releases](https://github.com/IMRAN104/MegaDownloadEnhancer/releases/latest)
+- **PowerShell Script:** Use `VPN-AutoToggle.ps1` from this repository
+
+### Quick Install
+1. [Download latest release](https://github.com/IMRAN104/MegaDownloadEnhancer/releases/latest)
+2. Extract to folder (e.g., `C:\Program Files\VPNManager`)
+3. Run `VPNManager.exe`
+4. Configure settings and click "Start Cycle"
 
 ## 🎯 Features
 
@@ -81,10 +100,12 @@ Get-VpnConnection
 
 | File | Description |
 |------|-------------|
+| `VPNManager.exe` | Windows GUI application (from releases) |
 | `VPN-AutoToggle.ps1` | Main automation script |
 | `Test-VpnSetup.ps1` | System validation and testing tool |
 | `QUICK-START.md` | Quick reference guide |
 | `SETUP-AND-USAGE.md` | Detailed documentation |
+| `CI_CD_GUIDE.md` | Automated CI/CD process guide |
 | `readme.md` | This file |
 
 ## 🔧 Parameters
@@ -178,6 +199,26 @@ This script is provided for legitimate use cases only. Users are responsible for
 - Complying with their VPN provider's terms of service
 - Understanding the security implications of toggling VPN
 - Ensuring proper authorization for automated VPN management
+
+## 🚀 CI/CD
+
+This project uses **GitHub Actions** for automated building, testing, and releases:
+
+- **Automated Builds:** Every push is built and tested
+- **Automated Releases:** Push a version tag to create a release
+- **Quality Checks:** Tests run on every PR
+
+See [CI_CD_GUIDE.md](CI_CD_GUIDE.md) for details on the automated release process.
+
+### For Developers
+
+Create a new release:
+```bash
+git tag v1.3.0
+git push origin v1.3.0
+```
+
+That's it! GitHub Actions will build, package, and publish the release automatically.
 
 ---
 

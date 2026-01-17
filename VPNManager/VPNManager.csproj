@@ -6,11 +6,14 @@
     <UseWindowsForms>true</UseWindowsForms>
     <AssemblyName>VPNManager</AssemblyName>
     <RootNamespace>VPNManager</RootNamespace>
-    <Version>1.0.0</Version>
+    <Version>1.2.0</Version>
     <Authors>VPN Manager</Authors>
     <Company>VPN Manager</Company>
     <Product>VPN Auto-Manager</Product>
     <Description>Windows application for automated VPN connection management</Description>
+    <RepositoryUrl>https://github.com/IMRAN104/MegaDownloadEnhancer</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageProjectUrl>https://github.com/IMRAN104/MegaDownloadEnhancer</PackageProjectUrl>
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
