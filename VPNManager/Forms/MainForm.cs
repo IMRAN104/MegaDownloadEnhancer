@@ -20,6 +20,7 @@ namespace VPNManager.Forms
         private Label lblVpnStatus;
         private Label lblVpnConnectionName;
         private Label lblVpnLastUpdate;
+        private Label lblCycleStartTime;
         private Panel pnlVpnIndicator;
 
         private GroupBox grpMegaStatus;
@@ -30,10 +31,11 @@ namespace VPNManager.Forms
         private Panel pnlMegaIndicator;
 
         private GroupBox grpControls;
-        private Button btnStart;
-        private Button btnStop;
+        private Button btnToggleCycle;
         private Button btnSettings;
         private Button btnRefresh;
+
+        private DateTime? _cycleStartTime;
 
         private StatusStrip statusStrip;
         private ToolStripStatusLabel lblStatus;
@@ -132,9 +134,18 @@ namespace VPNManager.Forms
                 ForeColor = Color.Gray
             };
 
+            lblCycleStartTime = new Label
+            {
+                Text = "Cycle: Not Started",
+                AutoSize = true,
+                Location = new Point(300, 60),
+                ForeColor = Color.Gray,
+                Font = new Font("Segoe UI", 9F)
+            };
+
             grpVpnStatus.Controls.AddRange(new Control[] {
                 lblVpnStatusTitle, lblVpnStatus, pnlVpnIndicator,
-                lblVpnConnectionName, lblVpnLastUpdate
+                lblVpnConnectionName, lblVpnLastUpdate, lblCycleStartTime
             });
 
             // Mega Status Group
@@ -188,20 +199,16 @@ namespace VPNManager.Forms
             // Controls Group
             grpControls = CreateGroupBox("Controls", 20, 350, 550, 80);
 
-            btnStart = CreateButton("Start VPN Cycle", 20, 25, 120, 35, Color.FromArgb(0, 180, 0));
-            btnStart.Click += BtnStart_Click;
+            btnToggleCycle = CreateButton("Start Cycle", 20, 25, 140, 35, Color.FromArgb(0, 180, 0));
+            btnToggleCycle.Click += BtnToggleCycle_Click;
 
-            btnStop = CreateButton("Stop VPN Cycle", 150, 25, 120, 35, Color.FromArgb(200, 50, 50));
-            btnStop.Click += BtnStop_Click;
-            btnStop.Enabled = false;
-
-            btnSettings = CreateButton("Settings", 280, 25, 100, 35, Color.FromArgb(100, 100, 100));
+            btnSettings = CreateButton("Settings", 180, 25, 100, 35, Color.FromArgb(100, 100, 100));
             btnSettings.Click += BtnSettings_Click;
 
-            btnRefresh = CreateButton("Refresh Now", 390, 25, 120, 35, Color.FromArgb(0, 120, 215));
+            btnRefresh = CreateButton("Refresh Now", 300, 25, 120, 35, Color.FromArgb(0, 120, 215));
             btnRefresh.Click += BtnRefresh_Click;
 
-            grpControls.Controls.AddRange(new Control[] { btnStart, btnStop, btnSettings, btnRefresh });
+            grpControls.Controls.AddRange(new Control[] { btnToggleCycle, btnSettings, btnRefresh });
 
             // Status Strip
             statusStrip = new StatusStrip();
@@ -381,69 +388,112 @@ namespace VPNManager.Forms
 
         private void UpdateButtonStates()
         {
-            btnStart.Enabled = !_vpnService.IsRunning && !string.IsNullOrEmpty(_settings.VpnName);
-            btnStop.Enabled = _vpnService.IsRunning;
+            var isRunning = _vpnService.IsRunning;
+            btnToggleCycle.Enabled = !string.IsNullOrEmpty(_settings.VpnName);
+            btnToggleCycle.Text = isRunning ? "Stop Cycle" : "Start Cycle";
+            btnToggleCycle.BackColor = isRunning ? Color.FromArgb(200, 50, 50) : Color.FromArgb(0, 180, 0);
+
+            if (_cycleStartTime.HasValue && isRunning)
+            {
+                lblCycleStartTime.Text = $"Cycle Started: {_cycleStartTime.Value:HH:mm:ss}";
+                lblCycleStartTime.ForeColor = Color.Green;
+            }
+            else
+            {
+                lblCycleStartTime.Text = "Cycle: Not Running";
+                lblCycleStartTime.ForeColor = Color.Gray;
+            }
         }
 
-        private async void BtnStart_Click(object? sender, EventArgs e)
+        private async void BtnToggleCycle_Click(object? sender, EventArgs e)
         {
-            try
+            if (_vpnService.IsRunning)
             {
-                // Validate settings before starting
-                var validationError = ValidateSettings();
-                if (!string.IsNullOrEmpty(validationError))
+                // Stop the cycle
+                try
                 {
-                    var result = MessageBox.Show(
-                        $"{validationError}\n\nWould you like to open Settings now?",
-                        "Configuration Required",
-                        MessageBoxButtons.YesNo,
-                        MessageBoxIcon.Warning
-                    );
+                    lblStatus.Text = "Stopping VPN cycle...";
+                    _vpnService.StopVpnCycle();
+                    _cycleStartTime = null;
+                    lblStatus.Text = "VPN cycle stopped";
+                    UpdateButtonStates();
 
-                    if (result == DialogResult.Yes)
-                    {
-                        BtnSettings_Click(sender, e);
-                    }
-                    return;
+                    // Wait for VPN to disconnect
+                    await System.Threading.Tasks.Task.Delay(3000);
+
+                    // Restart MEGAsync after stopping
+                    _megaService.RestartMegasync();
+
+                    // Wait a bit for MEGAsync to start
+                    await System.Threading.Tasks.Task.Delay(2000);
+
+                    // Force immediate status update
+                    UpdateVpnStatus();
+                    UpdateMegaStatus();
                 }
+                catch (Exception ex)
+                {
+                    MessageBox.Show(
+                        $"Failed to stop VPN cycle: {ex.Message}",
+                        "Error",
+                        MessageBoxButtons.OK,
+                        MessageBoxIcon.Error
+                    );
+                    lblStatus.Text = "Failed to stop";
+                }
+            }
+            else
+            {
+                // Start the cycle
+                try
+                {
+                    // Validate settings before starting
+                    var validationError = ValidateSettings();
+                    if (!string.IsNullOrEmpty(validationError))
+                    {
+                        var result = MessageBox.Show(
+                            $"{validationError}\n\nWould you like to open Settings now?",
+                            "Configuration Required",
+                            MessageBoxButtons.YesNo,
+                            MessageBoxIcon.Warning
+                        );
 
-                lblStatus.Text = "Starting VPN cycle...";
-                _vpnService.StartVpnCycle(_settings);
-                lblStatus.Text = "VPN cycle running";
-                UpdateButtonStates();
-                UpdateVpnStatus();
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show(
-                    $"Failed to start VPN cycle: {ex.Message}",
-                    "Error",
-                    MessageBoxButtons.OK,
-                    MessageBoxIcon.Error
-                );
-                lblStatus.Text = "Failed to start";
-            }
-        }
+                        if (result == DialogResult.Yes)
+                        {
+                            BtnSettings_Click(sender, e);
+                        }
+                        return;
+                    }
 
-        private void BtnStop_Click(object? sender, EventArgs e)
-        {
-            try
-            {
-                lblStatus.Text = "Stopping VPN cycle...";
-                _vpnService.StopVpnCycle();
-                lblStatus.Text = "VPN cycle stopped";
-                UpdateButtonStates();
-                UpdateVpnStatus();
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show(
-                    $"Failed to stop VPN cycle: {ex.Message}",
-                    "Error",
-                    MessageBoxButtons.OK,
-                    MessageBoxIcon.Error
-                );
-                lblStatus.Text = "Failed to stop";
+                    lblStatus.Text = "Starting VPN cycle...";
+                    _vpnService.StartVpnCycle(_settings);
+                    _cycleStartTime = DateTime.Now;
+                    lblStatus.Text = "VPN cycle running";
+                    UpdateButtonStates();
+
+                    // Wait for VPN to connect (PowerShell script handles this)
+                    await System.Threading.Tasks.Task.Delay(3000);
+
+                    // Restart MEGAsync after VPN connects
+                    _megaService.RestartMegasync();
+
+                    // Wait a bit for MEGAsync to start
+                    await System.Threading.Tasks.Task.Delay(2000);
+
+                    // Force immediate status update
+                    UpdateVpnStatus();
+                    UpdateMegaStatus();
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show(
+                        $"Failed to start VPN cycle: {ex.Message}",
+                        "Error",
+                        MessageBoxButtons.OK,
+                        MessageBoxIcon.Error
+                    );
+                    lblStatus.Text = "Failed to start";
+                }
             }
         }
 
@@ -477,12 +527,18 @@ namespace VPNManager.Forms
 
         private void TrayStart_Click(object? sender, EventArgs e)
         {
-            BtnStart_Click(sender, e);
+            if (!_vpnService.IsRunning)
+            {
+                BtnToggleCycle_Click(sender, e);
+            }
         }
 
         private void TrayStop_Click(object? sender, EventArgs e)
         {
-            BtnStop_Click(sender, e);
+            if (_vpnService.IsRunning)
+            {
+                BtnToggleCycle_Click(sender, e);
+            }
         }
 
         private void TrayExit_Click(object? sender, EventArgs e)
