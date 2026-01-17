@@ -162,5 +162,51 @@ namespace VPNManager.Services
 
             return "Not Installed";
         }
+
+        public void RestartMegasync()
+        {
+            try
+            {
+                var processName = _settings.MonitoredProcessName;
+                
+                // Kill existing process
+                var processes = Process.GetProcessesByName(processName);
+                foreach (var process in processes)
+                {
+                    try
+                    {
+                        process.Kill();
+                        process.WaitForExit(5000);
+                    }
+                    catch (Exception)
+                    {
+                        // Ignore if process already exited
+                    }
+                    finally
+                    {
+                        process.Dispose();
+                    }
+                }
+
+                // Wait before restart
+                System.Threading.Thread.Sleep(5000); // 5 second delay
+
+                // Find and start MEGAsync
+                var executablePath = FindExecutablePath();
+                if (!string.IsNullOrEmpty(executablePath) && File.Exists(executablePath))
+                {
+                    Process.Start(new ProcessStartInfo
+                    {
+                        FileName = executablePath,
+                        UseShellExecute = true,
+                        WindowStyle = ProcessWindowStyle.Minimized
+                    });
+                }
+            }
+            catch (Exception)
+            {
+                // Silently fail - MEGAsync restart is not critical
+            }
+        }
     }
 }
