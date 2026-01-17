@@ -13,7 +13,10 @@ namespace VPNManager.Models
         public int MaxRetries { get; set; } = 3;
         public bool MinimizeToTray { get; set; } = true;
         public bool StartMinimized { get; set; } = false;
-        public int StatusRefreshIntervalSeconds { get; set; } = 5;
+        public int StatusRefreshIntervalSeconds { get; set; } = 1;
+        public string MonitoredProcessName { get; set; } = "MEGAsync";
+        public string MonitoredProcessDisplayName { get; set; } = "MEGAsync";
+        public bool ProcessMonitoringEnabled { get; set; } = true;
 
         private static readonly string SettingsPath = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
