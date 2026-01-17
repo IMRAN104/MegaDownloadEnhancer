@@ -11,10 +11,16 @@ namespace VPNManager.Services
     {
         private Process? _vpnProcess;
         private bool _isRunning;
+        private AppSettings _settings;
 
         public event EventHandler<VpnStatus>? StatusChanged;
 
         public bool IsRunning => _isRunning;
+
+        public VpnService(AppSettings settings)
+        {
+            _settings = settings;
+        }
 
         public void StartVpnCycle(AppSettings settings)
         {
@@ -116,6 +122,10 @@ namespace VPNManager.Services
 
         public void StopVpnCycle()
         {
+            // First, disconnect VPN (this signals the PowerShell script to stop)
+            DisconnectAllVpn();
+
+            // Then kill the PowerShell process
             if (_vpnProcess != null && !_vpnProcess.HasExited)
             {
                 try
@@ -130,9 +140,6 @@ namespace VPNManager.Services
             }
 
             _isRunning = false;
-
-            // Disconnect any active VPN connection
-            DisconnectAllVpn();
         }
 
         public VpnStatus GetCurrentStatus(string vpnName)
@@ -227,17 +234,40 @@ namespace VPNManager.Services
         {
             try
             {
-                // Try to disconnect using rasdial
-                var psi = new ProcessStartInfo
-                {
-                    FileName = "rasdial.exe",
-                    Arguments = "/disconnect",
-                    UseShellExecute = false,
-                    CreateNoWindow = true
-                };
+                // Check if it's WARP
+                var vpnName = _settings.VpnName;
+                var isWarp = vpnName.Equals("WARP", StringComparison.OrdinalIgnoreCase) ||
+                              vpnName.Equals("CloudflareWARP", StringComparison.OrdinalIgnoreCase);
 
-                using var process = Process.Start(psi);
-                process?.WaitForExit(5000);
+                if (isWarp)
+                {
+                    // Disconnect WARP
+                    var psi = new ProcessStartInfo
+                    {
+                        FileName = "warp-cli.exe",
+                        Arguments = "disconnect",
+                        UseShellExecute = false,
+                        RedirectStandardOutput = true,
+                        CreateNoWindow = true
+                    };
+
+                    using var process = Process.Start(psi);
+                    process?.WaitForExit(10000); // Wait up to 10 seconds for WARP to disconnect
+                }
+                else
+                {
+                    // Disconnect Windows VPN using rasdial
+                    var psi = new ProcessStartInfo
+                    {
+                        FileName = "rasdial.exe",
+                        Arguments = "/disconnect",
+                        UseShellExecute = false,
+                        CreateNoWindow = true
+                    };
+
+                    using var process = Process.Start(psi);
+                    process?.WaitForExit(5000);
+                }
             }
             catch (Exception)
             {
