@@ -421,13 +421,7 @@ namespace VPNManager.Forms
                     // Wait for VPN to disconnect
                     await System.Threading.Tasks.Task.Delay(3000);
 
-                    // Restart MEGAsync after stopping
-                    _megaService.RestartMegasync();
-
-                    // Wait a bit for MEGAsync to start
-                    await System.Threading.Tasks.Task.Delay(2000);
-
-                    // Force immediate status update
+                    // Force immediate status update (MEGAsync is NOT restarted on stop)
                     UpdateVpnStatus();
                     UpdateMegaStatus();
                 }

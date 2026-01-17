@@ -73,8 +73,7 @@ namespace VPNManager.Services
         private string CreateSettingsJsonFile(AppSettings settings)
         {
             // Determine if using WARP
-            var useWarp = settings.VpnName.Equals("WARP", StringComparison.OrdinalIgnoreCase) ||
-                          settings.VpnName.Equals("CloudflareWARP", StringComparison.OrdinalIgnoreCase);
+            var useWarp = settings.VpnName.Equals("CloudflareWARP", StringComparison.OrdinalIgnoreCase);
 
             // Create settings object for PowerShell script
             var psSettings = new
@@ -167,8 +166,7 @@ namespace VPNManager.Services
         private bool IsVpnConnected(string vpnName)
         {
             // Check if it's WARP
-            if (vpnName.Equals("WARP", StringComparison.OrdinalIgnoreCase) ||
-                vpnName.Equals("CloudflareWARP", StringComparison.OrdinalIgnoreCase))
+            if (vpnName.Equals("CloudflareWARP", StringComparison.OrdinalIgnoreCase))
             {
                 return IsWarpConnected();
             }
@@ -236,8 +234,7 @@ namespace VPNManager.Services
             {
                 // Check if it's WARP
                 var vpnName = _settings.VpnName;
-                var isWarp = vpnName.Equals("WARP", StringComparison.OrdinalIgnoreCase) ||
-                              vpnName.Equals("CloudflareWARP", StringComparison.OrdinalIgnoreCase);
+                var isWarp = vpnName.Equals("CloudflareWARP", StringComparison.OrdinalIgnoreCase);
 
                 if (isWarp)
                 {
@@ -284,8 +281,7 @@ namespace VPNManager.Services
         public bool IsVpnAvailable(string vpnName)
         {
             // Check for WARP
-            if (vpnName.Equals("WARP", StringComparison.OrdinalIgnoreCase) ||
-                vpnName.Equals("CloudflareWARP", StringComparison.OrdinalIgnoreCase))
+            if (vpnName.Equals("CloudflareWARP", StringComparison.OrdinalIgnoreCase))
             {
                 return IsWarpAvailable();
             }
