@@ -91,7 +91,7 @@ function Test-Prerequisites {
     # Test 4: VPN Module
     Write-Host "`n[4/8] Checking VPN PowerShell module..." -ForegroundColor Cyan
     try {
-        $vpnModule = Get-Command Get-VpnConnection -ErrorAction Stop
+        $null = Get-Command Get-VpnConnection -ErrorAction Stop
         Write-TestResult `
             -TestName "VPN Module" `
             -Passed $true `
@@ -163,7 +163,7 @@ function Test-Prerequisites {
     # Test 7: rasdial Command
     Write-Host "`n[7/8] Checking rasdial command availability..." -ForegroundColor Cyan
     try {
-        $rasdialTest = rasdial 2>&1
+        $null = rasdial 2>&1
         Write-TestResult `
             -TestName "rasdial Command" `
             -Passed $true `
