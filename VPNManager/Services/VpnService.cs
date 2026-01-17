@@ -1,5 +1,6 @@
 using System;
 using System.Diagnostics;
+using System.IO;
 using System.Text.RegularExpressions;
 using Microsoft.Win32;
 using VPNManager.Models;
@@ -22,7 +23,10 @@ namespace VPNManager.Services
 
             _isRunning = true;
 
-            // Start PowerShell script with parameters
+            // Create settings.json for the PowerShell script
+            var settingsJsonPath = CreateSettingsJsonFile(settings);
+
+            // Start PowerShell script
             var scriptPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "VPN-AutoToggle.ps1");
 
             if (!File.Exists(scriptPath))
@@ -33,12 +37,13 @@ namespace VPNManager.Services
             var psi = new ProcessStartInfo
             {
                 FileName = "powershell.exe",
-                Arguments = BuildPowerShellArguments(scriptPath, settings),
+                Arguments = $"-ExecutionPolicy Bypass -File \"{scriptPath}\" -SettingsPath \"{settingsJsonPath}\"",
                 UseShellExecute = false,
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
                 CreateNoWindow = true,
-                WindowStyle = ProcessWindowStyle.Hidden
+                WindowStyle = ProcessWindowStyle.Hidden,
+                WorkingDirectory = AppDomain.CurrentDomain.BaseDirectory
             };
 
             _vpnProcess = Process.Start(psi);
@@ -57,6 +62,56 @@ namespace VPNManager.Services
                     });
                 };
             }
+        }
+
+        private string CreateSettingsJsonFile(AppSettings settings)
+        {
+            // Determine if using WARP
+            var useWarp = settings.VpnName.Equals("WARP", StringComparison.OrdinalIgnoreCase) ||
+                          settings.VpnName.Equals("CloudflareWARP", StringComparison.OrdinalIgnoreCase);
+
+            // Create settings object for PowerShell script
+            var psSettings = new
+            {
+                VpnName = settings.VpnName,
+                UseWarp = useWarp,
+                CycleDurationMinutes = settings.CycleDurationMinutes,
+                MaxRetries = settings.MaxRetries,
+                MegasyncPath = FindMegasyncPath(),
+                MegasyncRestartDelaySeconds = 5,
+                WarpUiPath = @"C:\Program Files\Cloudflare\Cloudflare WARP\Cloudflare WARP.exe",
+                LogPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "VPN-AutoToggle.log")
+            };
+
+            // Save to a temporary file in the application directory
+            var settingsPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "vpn-settings.json");
+            var json = System.Text.Json.JsonSerializer.Serialize(psSettings, new System.Text.Json.JsonSerializerOptions
+            {
+                WriteIndented = true
+            });
+            File.WriteAllText(settingsPath, json);
+
+            return settingsPath;
+        }
+
+        private string FindMegasyncPath()
+        {
+            // Common MEGAsync paths
+            var paths = new[]
+            {
+                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), @"MEGAsync\MEGAsync.exe"),
+                @"C:\Program Files\MEGAsync\MEGAsync.exe",
+                @"C:\Program Files (x86)\MEGAsync\MEGAsync.exe"
+            };
+
+            foreach (var path in paths)
+            {
+                if (File.Exists(path))
+                    return path;
+            }
+
+            // Default fallback
+            return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), @"MEGAsync\MEGAsync.exe");
         }
 
         public void StopVpnCycle()
@@ -104,6 +159,14 @@ namespace VPNManager.Services
 
         private bool IsVpnConnected(string vpnName)
         {
+            // Check if it's WARP
+            if (vpnName.Equals("WARP", StringComparison.OrdinalIgnoreCase) ||
+                vpnName.Equals("CloudflareWARP", StringComparison.OrdinalIgnoreCase))
+            {
+                return IsWarpConnected();
+            }
+
+            // Standard Windows VPN check
             try
             {
                 var psi = new ProcessStartInfo
@@ -121,6 +184,35 @@ namespace VPNManager.Services
                     process.WaitForExit(5000);
                     var output = process.StandardOutput.ReadToEnd();
                     return output.Trim().Equals("Connected", StringComparison.OrdinalIgnoreCase);
+                }
+            }
+            catch (Exception)
+            {
+                return false;
+            }
+
+            return false;
+        }
+
+        private bool IsWarpConnected()
+        {
+            try
+            {
+                var psi = new ProcessStartInfo
+                {
+                    FileName = "warp-cli.exe",
+                    Arguments = "status",
+                    UseShellExecute = false,
+                    RedirectStandardOutput = true,
+                    CreateNoWindow = true
+                };
+
+                using var process = Process.Start(psi);
+                if (process != null)
+                {
+                    process.WaitForExit(5000);
+                    var output = process.StandardOutput.ReadToEnd();
+                    return output.Contains("Connected", StringComparison.OrdinalIgnoreCase);
                 }
             }
             catch (Exception)
@@ -153,26 +245,6 @@ namespace VPNManager.Services
             }
         }
 
-        private string BuildPowerShellArguments(string scriptPath, AppSettings settings)
-        {
-            var args = $"-ExecutionPolicy Bypass -File \"{scriptPath}\" -VpnName \"{settings.VpnName}\"";
-
-            if (!string.IsNullOrEmpty(settings.Username))
-            {
-                args += $" -Username \"{settings.Username}\"";
-            }
-
-            if (!string.IsNullOrEmpty(settings.Password))
-            {
-                args += $" -Password \"{settings.Password}\"";
-            }
-
-            args += $" -CycleDurationMinutes {settings.CycleDurationMinutes}";
-            args += $" -MaxRetries {settings.MaxRetries}";
-
-            return args;
-        }
-
         protected virtual void OnStatusChanged(VpnStatus status)
         {
             StatusChanged?.Invoke(this, status);
@@ -181,12 +253,48 @@ namespace VPNManager.Services
         // Check if VPN is available on the system
         public bool IsVpnAvailable(string vpnName)
         {
+            // Check for WARP
+            if (vpnName.Equals("WARP", StringComparison.OrdinalIgnoreCase) ||
+                vpnName.Equals("CloudflareWARP", StringComparison.OrdinalIgnoreCase))
+            {
+                return IsWarpAvailable();
+            }
+
+            // Standard Windows VPN check
             try
             {
                 var psi = new ProcessStartInfo
                 {
                     FileName = "powershell.exe",
                     Arguments = $"Get-VpnConnection -Name \"{vpnName}\" -ErrorAction SilentlyContinue",
+                    UseShellExecute = false,
+                    RedirectStandardOutput = true,
+                    CreateNoWindow = true
+                };
+
+                using var process = Process.Start(psi);
+                if (process != null)
+                {
+                    process.WaitForExit(5000);
+                    return process.ExitCode == 0;
+                }
+            }
+            catch (Exception)
+            {
+                return false;
+            }
+
+            return false;
+        }
+
+        private bool IsWarpAvailable()
+        {
+            try
+            {
+                var psi = new ProcessStartInfo
+                {
+                    FileName = "warp-cli.exe",
+                    Arguments = "status",
                     UseShellExecute = false,
                     RedirectStandardOutput = true,
                     CreateNoWindow = true

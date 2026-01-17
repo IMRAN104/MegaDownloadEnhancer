@@ -39,9 +39,16 @@ namespace VPNManager.Forms
         // General Tab
         private CheckBox chkMinimizeToTray;
         private CheckBox chkStartMinimized;
+        private CheckBox chkProcessMonitoringEnabled;
 
         private NumericUpDown numRefreshInterval;
         private Label lblRefreshInterval;
+
+        private TextBox txtProcessName;
+        private Label lblProcessName;
+
+        private TextBox txtProcessDisplayName;
+        private Label lblProcessDisplayName;
 
         // Buttons
         private Button btnOk;
@@ -124,7 +131,7 @@ namespace VPNManager.Forms
             {
                 Location = new Point(180, yPosition - 2),
                 Size = new Size(controlWidth - 30, 25),
-                DropDownStyle = ComboBoxStyle.DropDownList
+                DropDownStyle = ComboBoxStyle.DropDown
             };
 
             btnRefreshVpns = new Button
@@ -132,7 +139,7 @@ namespace VPNManager.Forms
                 Text = "↻",
                 Location = new Point(430, yPosition - 3),
                 Size = new Size(30, 26),
-                ToolTip = "Refresh VPN list"
+                Tag = "Refresh VPN list"
             };
             btnRefreshVpns.Click += BtnRefreshVpns_Click;
 
@@ -274,7 +281,7 @@ namespace VPNManager.Forms
 
             yPosition += 35;
 
-            // Status Refresh Interval
+            // Status Refresh Interval (allow 0.5 to 60 seconds)
             lblRefreshInterval = new Label
             {
                 Text = "Status Refresh Interval (seconds):",
@@ -286,9 +293,56 @@ namespace VPNManager.Forms
             {
                 Location = new Point(250, yPosition - 2),
                 Size = new Size(controlWidth, 25),
-                Minimum = 1,
+                Minimum = 0.5m, // Allow 0.5 seconds
                 Maximum = 60,
-                Value = 5
+                Increment = 0.5m,
+                DecimalPlaces = 1,
+                Value = 1
+            };
+
+            yPosition += 35;
+
+            // Enable Process Monitoring
+            chkProcessMonitoringEnabled = new CheckBox
+            {
+                Text = "Enable process monitoring",
+                Location = new Point(20, yPosition),
+                Size = new Size(400, 24),
+                Checked = true
+            };
+
+            yPosition += 35;
+
+            // Process Name
+            lblProcessName = new Label
+            {
+                Text = "Process Name (e.g., MEGAsync):",
+                Location = new Point(20, yPosition),
+                Size = new Size(labelWidth, 20)
+            };
+
+            txtProcessName = new TextBox
+            {
+                Location = new Point(250, yPosition - 2),
+                Size = new Size(220, 25),
+                Text = "MEGAsync"
+            };
+
+            yPosition += 35;
+
+            // Process Display Name
+            lblProcessDisplayName = new Label
+            {
+                Text = "Display Name (e.g., MEGAsync):",
+                Location = new Point(20, yPosition),
+                Size = new Size(labelWidth, 20)
+            };
+
+            txtProcessDisplayName = new TextBox
+            {
+                Location = new Point(250, yPosition - 2),
+                Size = new Size(220, 25),
+                Text = "MEGAsync"
             };
 
             yPosition += 50;
@@ -297,11 +351,11 @@ namespace VPNManager.Forms
             var lblInfo = new Label
             {
                 Text = "⚙️ These settings control the application behavior and UI refresh rate.\n\n" +
-                       "• System tray: Minimize to tray instead of taskbar\n" +
-                       "• Start minimized: Launch directly to tray\n" +
-                       "• Refresh interval: How often to check VPN and MEGAsync status",
+                       "• Refresh interval: How often to check status (0.5-60 seconds)\n" +
+                       "• Process monitoring: Monitor custom process (e.g., MEGAsync)\n" +
+                       "• Auto-detection: Searches AppData\\Local, Program Files, Program Files (x86)",
                 Location = new Point(20, yPosition),
-                Size = new Size(460, 100),
+                Size = new Size(460, 120),
                 ForeColor = Color.FromArgb(80, 80, 80),
                 Font = new Font("Segoe UI", 8F)
             };
@@ -311,6 +365,11 @@ namespace VPNManager.Forms
             tabGeneral.Controls.Add(chkStartMinimized);
             tabGeneral.Controls.Add(lblRefreshInterval);
             tabGeneral.Controls.Add(numRefreshInterval);
+            tabGeneral.Controls.Add(chkProcessMonitoringEnabled);
+            tabGeneral.Controls.Add(lblProcessName);
+            tabGeneral.Controls.Add(txtProcessName);
+            tabGeneral.Controls.Add(lblProcessDisplayName);
+            tabGeneral.Controls.Add(txtProcessDisplayName);
             tabGeneral.Controls.Add(lblInfo);
         }
 
@@ -350,17 +409,35 @@ namespace VPNManager.Forms
             chkMinimizeToTray.Checked = _settings.MinimizeToTray;
             chkStartMinimized.Checked = _settings.StartMinimized;
             numRefreshInterval.Value = _settings.StatusRefreshIntervalSeconds;
+            chkProcessMonitoringEnabled.Checked = _settings.ProcessMonitoringEnabled;
+            txtProcessName.Text = _settings.MonitoredProcessName;
+            txtProcessDisplayName.Text = _settings.MonitoredProcessDisplayName;
         }
 
         private void RefreshVpnList()
         {
             try
             {
-                var vpns = _vpnService.GetAvailableVpns();
                 cmbVpnName.Items.Clear();
-                cmbVpnName.Items.AddRange(vpns);
 
-                if (vpns.Length == 0)
+                // Add WARP options at the top
+                cmbVpnName.Items.Add("CloudflareWARP");
+                cmbVpnName.Items.Add("WARP");
+
+                // Add Windows VPN connections
+                var vpns = _vpnService.GetAvailableVpns();
+                foreach (var vpn in vpns)
+                {
+                    if (!cmbVpnName.Items.Contains(vpn))
+                    {
+                        cmbVpnName.Items.Add(vpn);
+                    }
+                }
+
+                // Add manual option
+                cmbVpnName.Items.Add("(Manual Entry)");
+
+                if (cmbVpnName.Items.Count == 0)
                 {
                     cmbVpnName.Items.Add("No VPN connections found");
                 }
@@ -418,7 +495,10 @@ namespace VPNManager.Forms
             // General Settings
             _settings.MinimizeToTray = chkMinimizeToTray.Checked;
             _settings.StartMinimized = chkStartMinimized.Checked;
-            _settings.StatusRefreshIntervalSeconds = (int)numRefreshInterval.Value;
+            _settings.StatusRefreshIntervalSeconds = decimal.ToInt32(numRefreshInterval.Value);
+            _settings.ProcessMonitoringEnabled = chkProcessMonitoringEnabled.Checked;
+            _settings.MonitoredProcessName = txtProcessName.Text.Trim();
+            _settings.MonitoredProcessDisplayName = txtProcessDisplayName.Text.Trim();
         }
 
         private void BtnOk_Click(object? sender, EventArgs e)

@@ -46,7 +46,7 @@ namespace VPNManager.Forms
         {
             _settings = AppSettings.Load();
             _vpnService = new VpnService();
-            _megaService = new MegaService();
+            _megaService = new MegaService(_settings);
 
             InitializeComponent();
             InitializeTrayIcon();
@@ -58,6 +58,12 @@ namespace VPNManager.Forms
             Load += MainForm_Load;
             FormClosing += MainForm_FormClosing;
             Resize += MainForm_Resize;
+
+            // Show first-time setup dialog if needed
+            if (string.IsNullOrEmpty(_settings.VpnName))
+            {
+                ShowFirstTimeSetup();
+            }
 
             UpdateVpnStatus();
             UpdateMegaStatus();
@@ -161,7 +167,7 @@ namespace VPNManager.Forms
 
             lblMegaProcessId = new Label
             {
-                Text = "Process: Not Running",
+                Text = $"Process: {_settings.MonitoredProcessDisplayName} - Not Running",
                 AutoSize = true,
                 Location = new Point(20, 60)
             };
@@ -352,14 +358,14 @@ namespace VPNManager.Forms
                     lblMegaStatus.Text = status.IsSyncing ? "Syncing" : "Running";
                     lblMegaStatus.ForeColor = status.IsSyncing ? Color.Blue : Color.Green;
                     pnlMegaIndicator.BackColor = status.IsSyncing ? Color.Blue : Color.Green;
-                    lblMegaProcessId.Text = $"Process: MEGAsync (PID: {status.ProcessId})";
+                    lblMegaProcessId.Text = $"Process: {_settings.MonitoredProcessDisplayName} (PID: {status.ProcessId})";
                 }
                 else
                 {
                     lblMegaStatus.Text = "Not Running";
                     lblMegaStatus.ForeColor = Color.Red;
                     pnlMegaIndicator.BackColor = Color.Red;
-                    lblMegaProcessId.Text = "Process: Not Running";
+                    lblMegaProcessId.Text = $"Process: {_settings.MonitoredProcessDisplayName} - Not Running";
                 }
 
                 lblMegaLastUpdate.Text = $"Last Update: {DateTime.Now:HH:mm:ss}";
@@ -383,25 +389,21 @@ namespace VPNManager.Forms
         {
             try
             {
-                if (string.IsNullOrEmpty(_settings.VpnName))
+                // Validate settings before starting
+                var validationError = ValidateSettings();
+                if (!string.IsNullOrEmpty(validationError))
                 {
-                    MessageBox.Show(
-                        "Please configure VPN settings first.",
+                    var result = MessageBox.Show(
+                        $"{validationError}\n\nWould you like to open Settings now?",
                         "Configuration Required",
-                        MessageBoxButtons.OK,
+                        MessageBoxButtons.YesNo,
                         MessageBoxIcon.Warning
                     );
-                    return;
-                }
 
-                if (!_vpnService.IsVpnAvailable(_settings.VpnName))
-                {
-                    MessageBox.Show(
-                        $"VPN connection '{_settings.VpnName}' not found on this system.\n\nPlease check your Windows VPN settings.",
-                        "VPN Not Found",
-                        MessageBoxButtons.OK,
-                        MessageBoxIcon.Error
-                    );
+                    if (result == DialogResult.Yes)
+                    {
+                        BtnSettings_Click(sender, e);
+                    }
                     return;
                 }
 
@@ -487,6 +489,50 @@ namespace VPNManager.Forms
         {
             _settings.MinimizeToTray = false; // Override to allow closing
             this.Close();
+        }
+
+        private string? ValidateSettings()
+        {
+            if (string.IsNullOrEmpty(_settings.VpnName))
+            {
+                return "VPN name is not configured.\nPlease select a VPN connection in Settings.";
+            }
+
+            if (!_vpnService.IsVpnAvailable(_settings.VpnName))
+            {
+                return $"VPN connection '{_settings.VpnName}' is not available on this system.\n\n" +
+                       $"For WARP: Ensure 'warp-cli.exe' is in your PATH.\n" +
+                       $"For Windows VPN: Check your Windows VPN settings.";
+            }
+
+            return null; // No error
+        }
+
+        private void ShowFirstTimeSetup()
+        {
+            var result = MessageBox.Show(
+                "Welcome to VPN Manager!\n\n" +
+                "Before you can use this application, you need to configure:\n" +
+                "• VPN connection (CloudflareWARP or Windows VPN)\n" +
+                "• Status refresh interval\n" +
+                "• Process monitoring settings (optional)\n\n" +
+                "Would you like to open Settings now?",
+                "First-Time Setup",
+                MessageBoxButtons.YesNo,
+                MessageBoxIcon.Information
+            );
+
+            if (result == DialogResult.Yes)
+            {
+                var settingsForm = new SettingsForm(_settings);
+                if (settingsForm.ShowDialog(this) == DialogResult.OK)
+                {
+                    _settings.Save();
+                    _refreshTimer.Interval = _settings.StatusRefreshIntervalSeconds * 1000;
+                    UpdateVpnStatus();
+                    UpdateButtonStates();
+                }
+            }
         }
 
         protected override void Dispose(bool disposing)

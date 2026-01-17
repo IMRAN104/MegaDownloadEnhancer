@@ -1,11 +1,19 @@
 using System;
 using System.Diagnostics;
+using System.IO;
 using VPNManager.Models;
 
 namespace VPNManager.Services
 {
     public class MegaService
     {
+        private readonly AppSettings _settings;
+
+        public MegaService(AppSettings settings)
+        {
+            _settings = settings;
+        }
+
         public MegaStatus GetCurrentStatus()
         {
             var status = new MegaStatus
@@ -15,18 +23,25 @@ namespace VPNManager.Services
 
             try
             {
-                var processes = Process.GetProcessesByName("MEGAsync");
+                if (!_settings.ProcessMonitoringEnabled)
+                {
+                    status.IsRunning = false;
+                    status.Status = "Monitoring Disabled";
+                    return status;
+                }
+
+                var processName = _settings.MonitoredProcessName;
+                var processes = Process.GetProcessesByName(processName);
 
                 if (processes.Length > 0)
                 {
                     status.IsRunning = true;
                     status.ProcessId = processes[0].Id;
-                    status.ProcessName = "MEGAsync";
+                    status.ProcessName = _settings.MonitoredProcessDisplayName;
                     status.Status = "Running";
 
                     // Try to determine if it's syncing
-                    // This is a simplified check - in reality you might need to check the MEGAsync API or window titles
-                    status.IsSyncing = IsMegasyncSyncing(processes[0]);
+                    status.IsSyncing = IsProcessSyncing(processes[0]);
                     status.Status = status.IsSyncing ? "Syncing" : "Idle";
                 }
                 else
@@ -44,7 +59,7 @@ namespace VPNManager.Services
             return status;
         }
 
-        private bool IsMegasyncSyncing(Process process)
+        private bool IsProcessSyncing(Process process)
         {
             try
             {
@@ -66,11 +81,12 @@ namespace VPNManager.Services
             return false;
         }
 
-        public bool IsMegasyncInstalled()
+        public bool IsMonitoredProcessInstalled()
         {
             try
             {
-                var processes = Process.GetProcessesByName("MEGAsync");
+                var processName = _settings.MonitoredProcessName;
+                var processes = Process.GetProcessesByName(processName);
                 if (processes.Length > 0)
                 {
                     foreach (var p in processes)
@@ -80,18 +96,12 @@ namespace VPNManager.Services
                     return true;
                 }
 
-                // Check if MEGAsync.exe exists in common locations
-                var commonPaths = new[]
-                {
-                    @"C:\Program Files\MEGAsync\MEGAsync.exe",
-                    @"C:\Program Files (x86)\MEGAsync\MEGAsync.exe",
-                    Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                        @"MEGAsync\MEGAsync.exe")
-                };
+                // Check if process exists in common locations
+                var commonPaths = GetCommonProcessPaths();
 
                 foreach (var path in commonPaths)
                 {
-                    if (System.IO.File.Exists(path))
+                    if (File.Exists(path))
                         return true;
                 }
             }
@@ -103,23 +113,46 @@ namespace VPNManager.Services
             return false;
         }
 
-        public string GetMegasyncVersion()
+        public string FindExecutablePath()
+        {
+            var commonPaths = GetCommonProcessPaths();
+
+            foreach (var path in commonPaths)
+            {
+                if (File.Exists(path))
+                    return path;
+            }
+
+            return string.Empty;
+        }
+
+        private string[] GetCommonProcessPaths()
+        {
+            var processName = _settings.MonitoredProcessName;
+            var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+            var programFiles = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
+            var programFilesX86 = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86);
+
+            return new[]
+            {
+                Path.Combine(programFiles, "MEGAsync", "MEGAsync.exe"),
+                Path.Combine(programFilesX86, "MEGAsync", "MEGAsync.exe"),
+                Path.Combine(localAppData, "MEGAsync", "MEGAsync.exe"),
+                Path.Combine(programFiles, processName, $"{processName}.exe"),
+                Path.Combine(programFilesX86, processName, $"{processName}.exe"),
+                Path.Combine(localAppData, processName, $"{processName}.exe"),
+            };
+        }
+
+        public string GetProcessVersion()
         {
             try
             {
-                var commonPaths = new[]
+                var executablePath = FindExecutablePath();
+                if (!string.IsNullOrEmpty(executablePath) && File.Exists(executablePath))
                 {
-                    @"C:\Program Files\MEGAsync\MEGAsync.exe",
-                    @"C:\Program Files (x86)\MEGAsync\MEGAsync.exe",
-                };
-
-                foreach (var path in commonPaths)
-                {
-                    if (System.IO.File.Exists(path))
-                    {
-                        var versionInfo = FileVersionInfo.GetVersionInfo(path);
-                        return versionInfo.FileVersion ?? "Unknown";
-                    }
+                    var versionInfo = FileVersionInfo.GetVersionInfo(executablePath);
+                    return versionInfo.FileVersion ?? "Unknown";
                 }
             }
             catch (Exception)
