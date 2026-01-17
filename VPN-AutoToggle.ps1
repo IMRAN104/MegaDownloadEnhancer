@@ -251,7 +251,7 @@ function Start-Main {
 $script:ShouldStop = $false
 try {
     [Console]::CancelKeyPress.Add({
-            param($sender, $e)
+            param($eventSender, $e)
             $e.Cancel = $true
             $script:ShouldStop = $true
             Write-Log "Shutdown signal received..." -Level Warning
