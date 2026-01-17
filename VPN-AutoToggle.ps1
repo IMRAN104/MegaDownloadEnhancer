@@ -19,6 +19,7 @@ if (Test-Path $SettingsPath) {
         $MaxRetries = $settings.MaxRetries
         $MegasyncPath = $settings.MegasyncPath
         $MegasyncRestartDelaySeconds = $settings.MegasyncRestartDelaySeconds
+        $WarpUiPath = $settings.WarpUiPath
         $LogPath = $settings.LogPath
     }
     catch {
@@ -34,6 +35,7 @@ if ($null -eq $MaxRetries) { $MaxRetries = 3 }
 if ($null -eq $LogPath) { $LogPath = ".\VPN-AutoToggle.log" }
 if ($null -eq $MegasyncRestartDelaySeconds) { $MegasyncRestartDelaySeconds = 5 }
 if ($null -eq $MegasyncPath) { $MegasyncPath = "C:\Users\Imran\AppData\Local\MEGAsync\MEGAsync.exe" }
+if ($null -eq $WarpUiPath) { $WarpUiPath = "C:\Program Files\Cloudflare\Cloudflare WARP\Cloudflare WARP.exe" }
 
 # Global variables
 $script:ShouldStop = $false
@@ -91,6 +93,8 @@ function Connect-VpnWithRetry {
             Write-Log "Attempting to connect (Attempt $i of $MaxRetries)..." -Level Info
             
             if ($UseWarp) {
+                # Ensure WARP UI is running
+                if ($i -eq 1) { Start-WarpUi }
                 warp-cli connect | Out-Null
             }
             else {
@@ -166,6 +170,25 @@ function Restart-Megasync {
     }
     else {
         Write-Log "Error: MEGAsync not found at $MegasyncPath" -Level Error
+    }
+}
+
+function Start-WarpUi {
+    # Check if WARP UI is already running
+    $process = Get-Process -Name "Cloudflare WARP" -ErrorAction SilentlyContinue
+    if ($process) {
+        Write-Log "WARP UI is already running (PID: $($process.Id))" -Level Info
+        return
+    }
+
+    # Start WARP UI if not running
+    if (Test-Path $WarpUiPath) {
+        Write-Log "Starting Cloudflare WARP UI from $WarpUiPath" -Level Info
+        Start-Process -FilePath $WarpUiPath -WindowStyle Minimized
+        Write-Log "WARP UI started." -Level Success
+    }
+    else {
+        Write-Log "Warning: WARP UI not found at $WarpUiPath" -Level Warning
     }
 }
 

@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net6.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <ApplicationIcon>app.ico</ApplicationIcon>
+    <AssemblyName>VPNManager</AssemblyName>
+    <RootNamespace>VPNManager</RootNamespace>
+    <Version>1.0.0</Version>
+    <Authors>VPN Manager</Authors>
+    <Company>VPN Manager</Company>
+    <Product>VPN Auto-Manager</Product>
+    <Description>Windows application for automated VPN connection management</Description>
+  </PropertyGroup>
+
+</Project>
