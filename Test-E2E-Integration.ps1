@@ -1,17 +1,43 @@
 <#
 .SYNOPSIS
     E2E Test for VPN & MEGAsync Integration
+.PARAMETER VpnName
+    VPN connection name to test (default: CloudflareWARP)
+.PARAMETER UseWarp
+    Use Cloudflare WARP (default: true)
+.PARAMETER MegasyncPath
+    Path to MEGAsync.exe (default: auto-detect)
 #>
 
-$SettingsPath = ".\settings.json"
-if (-not (Test-Path $SettingsPath)) {
-    Write-Host "Error: settings.json not found." -ForegroundColor Red
-    exit 1
-}
+[CmdletBinding()]
+param(
+    [Parameter(Mandatory = $false)]
+    [string]$VpnName = "CloudflareWARP",
+    
+    [Parameter(Mandatory = $false)]
+    [bool]$UseWarp = $true,
+    
+    [Parameter(Mandatory = $false)]
+    [string]$MegasyncPath = ""
+)
 
-$settings = Get-Content $SettingsPath -Raw | ConvertFrom-Json
-$MegasyncPath = $settings.MegasyncPath
-$UseWarp = $settings.UseWarp
+# Auto-detect MEGAsync path if not specified
+if ([string]::IsNullOrEmpty($MegasyncPath)) {
+    $possiblePaths = @(
+        "$env:LOCALAPPDATA\MEGAsync\MEGAsync.exe",
+        "${env:ProgramFiles}\MEGAsync\MEGAsync.exe",
+        "${env:ProgramFiles(x86)}\MEGAsync\MEGAsync.exe"
+    )
+    foreach ($path in $possiblePaths) {
+        if (Test-Path $path) {
+            $MegasyncPath = $path
+            break
+        }
+    }
+    if ([string]::IsNullOrEmpty($MegasyncPath)) {
+        $MegasyncPath = "$env:LOCALAPPDATA\MEGAsync\MEGAsync.exe"
+    }
+}
 
 function Get-MegaPid {
     return (Get-Process -Name "MEGAsync" -ErrorAction SilentlyContinue).Id
@@ -21,7 +47,7 @@ function Get-VpnStatus {
     if ($UseWarp) {
         return (warp-cli status | Select-String "Status update: Connected").Length -gt 0
     }
-    return (Get-VpnConnection -Name $settings.VpnName).ConnectionStatus -eq "Connected"
+    return (Get-VpnConnection -Name $VpnName).ConnectionStatus -eq "Connected"
 }
 
 Write-Host "--- E2E Integration Test ---" -ForegroundColor Cyan
@@ -52,11 +78,11 @@ Write-Host "`nSimulating Toggle Event..." -ForegroundColor Yellow
 # Mock a toggle: if connected, disconnect. If disconnected, connect.
 if ($initialVpn) {
     Write-Host "Action: Disconnecting..."
-    if ($UseWarp) { warp-cli disconnect | Out-Null } else { rasdial $settings.VpnName /disconnect | Out-Null }
+    if ($UseWarp) { warp-cli disconnect | Out-Null } else { rasdial $VpnName /disconnect | Out-Null }
 }
 else {
     Write-Host "Action: Connecting..."
-    if ($UseWarp) { warp-cli connect | Out-Null } else { rasdial $settings.VpnName | Out-Null }
+    if ($UseWarp) { warp-cli connect | Out-Null } else { rasdial $VpnName | Out-Null }
 }
 
 Start-Sleep -Seconds 10

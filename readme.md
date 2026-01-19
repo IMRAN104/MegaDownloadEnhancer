@@ -34,9 +34,21 @@ Download the Windows application with GUI or use the PowerShell script directly:
 ## 📋 Requirements
 
 - **OS**: Windows 10/11 or Windows Server 2016+
-- **PowerShell**: Version 5.1 or higher
-- **VPN**: Configured VPN connection in Windows
+- **PowerShell**: Version 5.1 or higher (for PowerShell script)
+- **VPN**: Cloudflare WARP or Windows VPN connection
 - **Permissions**: Administrator privileges recommended
+
+## ⚙️ Configuration
+
+**VPNManager GUI (Recommended):**
+- Settings managed through Settings UI
+- Configuration stored in `%AppData%\VPNManager\settings.json`
+- Persistent across application restarts
+
+**PowerShell Script:**
+- Configure via command-line parameters (no configuration file needed)
+- Auto-detects MEGAsync installation path
+- See examples below for usage
 
 ## 🚀 Quick Start
 
@@ -54,29 +66,31 @@ Get-VpnConnection
 
 ### 3. Start Auto-Toggle
 ```powershell
-# Basic usage (10-minute cycles)
-.\VPN-AutoToggle.ps1 -VpnName "YourVPNName"
+# Basic usage with Cloudflare WARP (default)
+.\VPN-AutoToggle.ps1
+
+# With custom VPN and 5-minute cycles
+.\VPN-AutoToggle.ps1 -VpnName "MyVPN" -CycleDurationMinutes 5
 
 # Quick test (1-minute cycles)
-.\VPN-AutoToggle.ps1 -VpnName "YourVPNName" -CycleDurationMinutes 1
+.\VPN-AutoToggle.ps1 -VpnName "CloudflareWARP" -CycleDurationMinutes 1
 ```
 
 ## 📖 Documentation
 
 - **[QUICK-START.md](QUICK-START.md)** - Get started in 3 steps
 - **[SETUP-AND-USAGE.md](SETUP-AND-USAGE.md)** - Complete setup guide and troubleshooting
+- **[SECURITY.md](SECURITY.md)** - Security policy and best practices
 
 ## 💡 Usage Examples
 
 ### Basic Usage
 ```powershell
-# With saved credentials
-.\VPN-AutoToggle.ps1 -VpnName "MyVPN"
-```
+# Use Cloudflare WARP (default)
+.\VPN-AutoToggle.ps1
 
-### With Credentials
-```powershell
-.\VPN-AutoToggle.ps1 -VpnName "MyVPN" -Username "user@domain.com" -Password "YourPassword"
+# Use specific VPN
+.\VPN-AutoToggle.ps1 -VpnName "MyVPN"
 ```
 
 ### Custom Timing
@@ -112,10 +126,10 @@ Get-VpnConnection
 
 | Parameter | Required | Default | Description |
 |-----------|----------|---------|-------------|
-| `VpnName` | ✅ Yes | - | Name of your VPN connection |
-| `Username` | ❌ No | - | VPN username (if not saved) |
-| `Password` | ❌ No | - | VPN password (if not saved) |
+| `VpnName` | ❌ No | `CloudflareWARP` | Name of VPN connection |
+| `UseWarp` | ❌ No | Auto-detect | Use WARP (auto-enabled for CloudflareWARP) |
 | `CycleDurationMinutes` | ❌ No | 10 | Minutes for each state |
+| `MegasyncPath` | ❌ No | Auto-detect | Path to MEGAsync.exe |
 | `LogPath` | ❌ No | `.\VPN-AutoToggle.log` | Log file location |
 | `MaxRetries` | ❌ No | 3 | Connection retry attempts |
 

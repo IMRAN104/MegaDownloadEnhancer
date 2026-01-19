@@ -1,41 +1,81 @@
 <#
 .SYNOPSIS
     Automated VPN & MEGAsync Toggle Script
+.DESCRIPTION
+    Automatically cycles VPN connection on/off at regular intervals with optional MEGAsync restart support.
+.PARAMETER VpnName
+    Name of the VPN connection (use "CloudflareWARP" for WARP, or any Windows VPN connection name)
+.PARAMETER UseWarp
+    Use Cloudflare WARP instead of Windows VPN (automatically enabled if VpnName is "CloudflareWARP")
+.PARAMETER CycleDurationMinutes
+    Duration in minutes for each connection state (default: 10)
+.PARAMETER MaxRetries
+    Maximum number of connection retry attempts (default: 3)
+.PARAMETER MegasyncPath
+    Path to MEGAsync.exe (default: auto-detect in common locations)
+.PARAMETER MegasyncRestartDelaySeconds
+    Delay in seconds before restarting MEGAsync (default: 5)
+.PARAMETER WarpUiPath
+    Path to Cloudflare WARP UI executable (default: standard installation path)
+.PARAMETER LogPath
+    Path to log file (default: .\VPN-AutoToggle.log)
+.EXAMPLE
+    .\VPN-AutoToggle.ps1 -VpnName "CloudflareWARP"
+    Uses Cloudflare WARP with default 10-minute cycles
+.EXAMPLE
+    .\VPN-AutoToggle.ps1 -VpnName "MyVPN" -CycleDurationMinutes 5
+    Uses Windows VPN "MyVPN" with 5-minute cycles
 #>
 
 [CmdletBinding()]
 param(
     [Parameter(Mandatory = $false)]
-    [string]$SettingsPath = ".\settings.json"
+    [string]$VpnName = "CloudflareWARP",
+    
+    [Parameter(Mandatory = $false)]
+    [bool]$UseWarp = $false,
+    
+    [Parameter(Mandatory = $false)]
+    [int]$CycleDurationMinutes = 10,
+    
+    [Parameter(Mandatory = $false)]
+    [int]$MaxRetries = 3,
+    
+    [Parameter(Mandatory = $false)]
+    [string]$MegasyncPath = "",
+    
+    [Parameter(Mandatory = $false)]
+    [int]$MegasyncRestartDelaySeconds = 5,
+    
+    [Parameter(Mandatory = $false)]
+    [string]$WarpUiPath = "C:\Program Files\Cloudflare\Cloudflare WARP\Cloudflare WARP.exe",
+    
+    [Parameter(Mandatory = $false)]
+    [string]$LogPath = ".\VPN-AutoToggle.log"
 )
 
-# Load Settings
-if (Test-Path $SettingsPath) {
-    try {
-        $settings = Get-Content $SettingsPath -Raw | ConvertFrom-Json
-        $VpnName = $settings.VpnName
-        $UseWarp = $settings.UseWarp
-        $CycleDurationMinutes = $settings.CycleDurationMinutes
-        $MaxRetries = $settings.MaxRetries
-        $MegasyncPath = $settings.MegasyncPath
-        $MegasyncRestartDelaySeconds = $settings.MegasyncRestartDelaySeconds
-        $WarpUiPath = $settings.WarpUiPath
-        $LogPath = $settings.LogPath
-    }
-    catch {
-        Write-Host "Warning: Failed to load settings from $SettingsPath. Using defaults." -ForegroundColor Yellow
-    }
+# Auto-detect WARP usage based on VPN name
+if ($VpnName -eq "CloudflareWARP") {
+    $UseWarp = $true
 }
 
-# Defaults
-if ($null -eq $VpnName) { $VpnName = "" }
-if ($null -eq $UseWarp) { $UseWarp = $false }
-if ($null -eq $CycleDurationMinutes) { $CycleDurationMinutes = 10 }
-if ($null -eq $MaxRetries) { $MaxRetries = 3 }
-if ($null -eq $LogPath) { $LogPath = ".\VPN-AutoToggle.log" }
-if ($null -eq $MegasyncRestartDelaySeconds) { $MegasyncRestartDelaySeconds = 5 }
-if ($null -eq $MegasyncPath) { $MegasyncPath = "C:\Users\Imran\AppData\Local\MEGAsync\MEGAsync.exe" }
-if ($null -eq $WarpUiPath) { $WarpUiPath = "C:\Program Files\Cloudflare\Cloudflare WARP\Cloudflare WARP.exe" }
+# Auto-detect MEGAsync path if not specified
+if ([string]::IsNullOrEmpty($MegasyncPath)) {
+    $possiblePaths = @(
+        "$env:LOCALAPPDATA\MEGAsync\MEGAsync.exe",
+        "${env:ProgramFiles}\MEGAsync\MEGAsync.exe",
+        "${env:ProgramFiles(x86)}\MEGAsync\MEGAsync.exe"
+    )
+    foreach ($path in $possiblePaths) {
+        if (Test-Path $path) {
+            $MegasyncPath = $path
+            break
+        }
+    }
+    if ([string]::IsNullOrEmpty($MegasyncPath)) {
+        $MegasyncPath = "$env:LOCALAPPDATA\MEGAsync\MEGAsync.exe"  # Default fallback
+    }
+}
 
 # Global variables
 $script:ShouldStop = $false

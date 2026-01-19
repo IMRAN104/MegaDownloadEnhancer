@@ -1,3 +1,23 @@
+# ============================================
+# Security: Runtime and User-Specific Files
+# ============================================
+# IMPORTANT: These files must NEVER be committed as they contain
+# user-specific paths, runtime data, or personal information
+
+# Runtime logs (contain execution data and user paths)
+*.log
+VPN-AutoToggle.log
+
+# User-specific configuration files
+# Note: VPNManager GUI stores settings in %AppData%\VPNManager\settings.json
+# PowerShell script uses command-line parameters (no config file needed)
+settings.json
+vpn-settings.json
+
+# ============================================
+# Standard Exclusions
+# ============================================
+
 # Logs
 *.log
 
