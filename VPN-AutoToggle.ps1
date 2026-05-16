@@ -34,7 +34,7 @@ if ($null -eq $CycleDurationMinutes) { $CycleDurationMinutes = 10 }
 if ($null -eq $MaxRetries) { $MaxRetries = 3 }
 if ($null -eq $LogPath) { $LogPath = ".\VPN-AutoToggle.log" }
 if ($null -eq $MegasyncRestartDelaySeconds) { $MegasyncRestartDelaySeconds = 5 }
-if ($null -eq $MegasyncPath) { $MegasyncPath = "C:\Users\Imran\AppData\Local\MEGAsync\MEGAsync.exe" }
+if ($null -eq $MegasyncPath) { $MegasyncPath = "$env:LOCALAPPDATA\MEGAsync\MEGAsync.exe" }
 if ($null -eq $WarpUiPath) { $WarpUiPath = "C:\Program Files\Cloudflare\Cloudflare WARP\Cloudflare WARP.exe" }
 
 # Global variables

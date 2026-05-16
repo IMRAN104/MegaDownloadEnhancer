@@ -42,7 +42,7 @@ From `VPN-AutoToggle.log`:
 [2026-01-18 02:10:52] [Mega] Restarting MEGAsync...
 [2026-01-18 02:10:52] [Mega] Stopping current MEGAsync process (ID: 31792)...
 [2026-01-18 02:10:54] [Mega] Waiting 5 seconds before starting...
-[2026-01-18 02:10:59] [Mega] Starting MEGAsync from C:\Users\Imran\AppData\Local\MEGAsync\MEGAsync.exe
+[2026-01-18 02:10:59] [Mega] Starting MEGAsync from %LOCALAPPDATA%\MEGAsync\MEGAsync.exe
 [2026-01-18 02:10:59] [Success] MEGAsync started.
 ```
 
@@ -226,7 +226,7 @@ warp-cli status
   "UseWarp": true,
   "CycleDurationMinutes": 1,
   "MaxRetries": 3,
-  "MegasyncPath": "C:\\Users\\Imran\\AppData\\Local\\MEGAsync\\MEGAsync.exe",
+  "MegasyncPath": "%LOCALAPPDATA%\\MEGAsync\\MEGAsync.exe",
   "MegasyncRestartDelaySeconds": 5,
   "LogPath": "VPN-AutoToggle.log"
 }

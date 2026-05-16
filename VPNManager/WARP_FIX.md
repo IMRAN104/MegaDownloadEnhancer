@@ -37,7 +37,7 @@ The C# app now creates a `vpn-settings.json` file with ALL required settings:
   "UseWarp": true,
   "CycleDurationMinutes": 10,
   "MaxRetries": 3,
-  "MegasyncPath": "C:\\Users\\Imran\\AppData\\Local\\MEGAsync\\MEGAsync.exe",
+  "MegasyncPath": "%LOCALAPPDATA%\\MEGAsync\\MEGAsync.exe",
   "MegasyncRestartDelaySeconds": 5,
   "WarpUiPath": "C:\\Program Files\\Cloudflare\\Cloudflare WARP\\Cloudflare WARP.exe",
   "LogPath": "VPN-AutoToggle.log"

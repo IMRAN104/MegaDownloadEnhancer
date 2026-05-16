@@ -98,7 +98,7 @@ VPNManager/
   "UseWarp": true,
   "CycleDurationMinutes": 10,
   "MaxRetries": 3,
-  "MegasyncPath": "C:\\Users\\Imran\\AppData\\Local\\MEGAsync\\MEGAsync.exe",
+  "MegasyncPath": "%LOCALAPPDATA%\\MEGAsync\\MEGAsync.exe",
   "MegasyncRestartDelaySeconds": 5
 }
 ```

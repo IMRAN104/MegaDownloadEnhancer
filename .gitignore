@@ -122,6 +122,10 @@ bld/
 *.scc
 
 ## Sensitive configuration
+# User-specific settings with sensitive data
+settings.json
+VPN-AutoToggle.log
+
 *.json
 !appsettings*.json
 !project.json
