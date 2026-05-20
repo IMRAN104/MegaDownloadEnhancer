@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Text.Json;
+using VPNManager.Forms;
 
 namespace VPNManager.Models
 {
@@ -17,6 +18,8 @@ namespace VPNManager.Models
         public string MonitoredProcessName { get; set; } = "MEGAsync";
         public string MonitoredProcessDisplayName { get; set; } = "MEGAsync";
         public bool ProcessMonitoringEnabled { get; set; } = true;
+        public bool AutoStart { get; set; } = true;
+        public ThemeMode ThemeMode { get; set; } = ThemeMode.System;
 
         private static readonly string SettingsPath = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
@@ -43,7 +46,6 @@ namespace VPNManager.Models
             }
             catch (Exception)
             {
-                // If loading fails, return default settings
             }
 
             return new AppSettings();
@@ -69,7 +71,6 @@ namespace VPNManager.Models
             }
             catch (Exception)
             {
-                // Handle save error silently or log it
             }
         }
     }

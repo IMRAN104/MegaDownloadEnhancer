@@ -1,17 +1,16 @@
 using System;
 using System.Diagnostics;
 using System.IO;
-using System.Text.RegularExpressions;
-using Microsoft.Win32;
+using System.Threading.Tasks;
 using VPNManager.Models;
 
 namespace VPNManager.Services
 {
-    public class VpnService
+    public class VpnService : IDisposable
     {
         private Process? _vpnProcess;
         private bool _isRunning;
-        private AppSettings _settings;
+        private readonly AppSettings _settings;
 
         public event EventHandler<VpnStatus>? StatusChanged;
 
@@ -29,10 +28,8 @@ namespace VPNManager.Services
 
             _isRunning = true;
 
-            // Create settings.json for the PowerShell script
             var settingsJsonPath = CreateSettingsJsonFile(settings);
 
-            // Start PowerShell script
             var scriptPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "VPN-AutoToggle.ps1");
 
             if (!File.Exists(scriptPath))
@@ -72,10 +69,8 @@ namespace VPNManager.Services
 
         private string CreateSettingsJsonFile(AppSettings settings)
         {
-            // Determine if using WARP
             var useWarp = settings.VpnName.Equals("CloudflareWARP", StringComparison.OrdinalIgnoreCase);
 
-            // Create settings object for PowerShell script
             var psSettings = new
             {
                 VpnName = settings.VpnName,
@@ -88,7 +83,6 @@ namespace VPNManager.Services
                 LogPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "VPN-AutoToggle.log")
             };
 
-            // Save to a temporary file in the application directory
             var settingsPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "vpn-settings.json");
             var json = System.Text.Json.JsonSerializer.Serialize(psSettings, new System.Text.Json.JsonSerializerOptions
             {
@@ -101,7 +95,6 @@ namespace VPNManager.Services
 
         private string FindMegasyncPath()
         {
-            // Common MEGAsync paths
             var paths = new[]
             {
                 Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), @"MEGAsync\MEGAsync.exe"),
@@ -115,16 +108,13 @@ namespace VPNManager.Services
                     return path;
             }
 
-            // Default fallback
             return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), @"MEGAsync\MEGAsync.exe");
         }
 
         public void StopVpnCycle()
         {
-            // First, disconnect VPN (this signals the PowerShell script to stop)
             DisconnectAllVpn();
 
-            // Then kill the PowerShell process
             if (_vpnProcess != null && !_vpnProcess.HasExited)
             {
                 try
@@ -134,14 +124,29 @@ namespace VPNManager.Services
                 }
                 catch (Exception)
                 {
-                    // Process may have already exited
                 }
             }
 
+            DisposeProcess();
             _isRunning = false;
         }
 
-        public VpnStatus GetCurrentStatus(string vpnName)
+        private void DisposeProcess()
+        {
+            if (_vpnProcess != null)
+            {
+                try
+                {
+                    _vpnProcess.Dispose();
+                }
+                catch (Exception)
+                {
+                }
+                _vpnProcess = null;
+            }
+        }
+
+        public async Task<VpnStatus> GetCurrentStatusAsync(string vpnName)
         {
             var status = new VpnStatus
             {
@@ -151,7 +156,7 @@ namespace VPNManager.Services
 
             try
             {
-                status.IsConnected = IsVpnConnected(vpnName);
+                status.IsConnected = await IsVpnConnectedAsync(vpnName);
                 status.CurrentState = status.IsConnected ? "Connected" : "Disconnected";
                 status.ConnectionName = vpnName;
             }
@@ -163,82 +168,80 @@ namespace VPNManager.Services
             return status;
         }
 
-        private bool IsVpnConnected(string vpnName)
+        private async Task<bool> IsVpnConnectedAsync(string vpnName)
         {
-            // Check if it's WARP
             if (vpnName.Equals("CloudflareWARP", StringComparison.OrdinalIgnoreCase))
             {
-                return IsWarpConnected();
+                return await IsWarpConnectedAsync();
             }
 
-            // Standard Windows VPN check
-            try
+            return await Task.Run(() =>
             {
-                var psi = new ProcessStartInfo
+                try
                 {
-                    FileName = "powershell.exe",
-                    Arguments = $"Get-VpnConnection -Name \"{vpnName}\" | Select-Object -ExpandProperty ConnectionStatus",
-                    UseShellExecute = false,
-                    RedirectStandardOutput = true,
-                    CreateNoWindow = true
-                };
+                    var psi = new ProcessStartInfo
+                    {
+                        FileName = "powershell.exe",
+                        Arguments = $"Get-VpnConnection -Name \"{vpnName}\" | Select-Object -ExpandProperty ConnectionStatus",
+                        UseShellExecute = false,
+                        RedirectStandardOutput = true,
+                        CreateNoWindow = true
+                    };
 
-                using var process = Process.Start(psi);
-                if (process != null)
-                {
-                    process.WaitForExit(5000);
-                    var output = process.StandardOutput.ReadToEnd();
-                    return output.Trim().Equals("Connected", StringComparison.OrdinalIgnoreCase);
+                    using var process = Process.Start(psi);
+                    if (process != null)
+                    {
+                        process.WaitForExit(5000);
+                        var output = process.StandardOutput.ReadToEnd();
+                        return output.Trim().Equals("Connected", StringComparison.OrdinalIgnoreCase);
+                    }
                 }
-            }
-            catch (Exception)
-            {
+                catch (Exception)
+                {
+                }
                 return false;
-            }
-
-            return false;
+            });
         }
 
-        private bool IsWarpConnected()
+        private async Task<bool> IsWarpConnectedAsync()
         {
-            try
+            return await Task.Run(() =>
             {
-                var psi = new ProcessStartInfo
+                try
                 {
-                    FileName = "warp-cli.exe",
-                    Arguments = "status",
-                    UseShellExecute = false,
-                    RedirectStandardOutput = true,
-                    CreateNoWindow = true
-                };
+                    var psi = new ProcessStartInfo
+                    {
+                        FileName = "warp-cli.exe",
+                        Arguments = "status",
+                        UseShellExecute = false,
+                        RedirectStandardOutput = true,
+                        CreateNoWindow = true
+                    };
 
-                using var process = Process.Start(psi);
-                if (process != null)
-                {
-                    process.WaitForExit(5000);
-                    var output = process.StandardOutput.ReadToEnd();
-                    return output.Contains("Connected", StringComparison.OrdinalIgnoreCase);
+                    using var process = Process.Start(psi);
+                    if (process != null)
+                    {
+                        process.WaitForExit(5000);
+                        var output = process.StandardOutput.ReadToEnd();
+                        return output.Contains("Connected", StringComparison.OrdinalIgnoreCase);
+                    }
                 }
-            }
-            catch (Exception)
-            {
+                catch (Exception)
+                {
+                }
                 return false;
-            }
-
-            return false;
+            });
         }
 
         private void DisconnectAllVpn()
         {
             try
             {
-                // Check if it's WARP
                 var vpnName = _settings.VpnName;
                 var isWarp = vpnName.Equals("CloudflareWARP", StringComparison.OrdinalIgnoreCase);
 
                 if (isWarp)
                 {
-                    // Disconnect WARP
                     var psi = new ProcessStartInfo
                     {
                         FileName = "warp-cli.exe",
@@ -249,11 +252,10 @@ namespace VPNManager.Services
                     };
 
                     using var process = Process.Start(psi);
-                    process?.WaitForExit(10000); // Wait up to 10 seconds for WARP to disconnect
+                    process?.WaitForExit(10000);
                 }
                 else
                 {
-                    // Disconnect Windows VPN using rasdial
                     var psi = new ProcessStartInfo
                     {
                         FileName = "rasdial.exe",
@@ -268,7 +270,6 @@ namespace VPNManager.Services
             }
             catch (Exception)
             {
-                // Ignore errors during disconnect
             }
         }
 
@@ -277,16 +278,13 @@ namespace VPNManager.Services
             StatusChanged?.Invoke(this, status);
         }
 
-        // Check if VPN is available on the system
         public bool IsVpnAvailable(string vpnName)
         {
-            // Check for WARP
             if (vpnName.Equals("CloudflareWARP", StringComparison.OrdinalIgnoreCase))
             {
                 return IsWarpAvailable();
             }
 
-            // Standard Windows VPN check
             try
             {
                 var psi = new ProcessStartInfo
@@ -368,6 +366,12 @@ namespace VPNManager.Services
             }
 
             return Array.Empty<string>();
+        }
+
+        public void Dispose()
+        {
+            StopVpnCycle();
+            DisposeProcess();
         }
     }
 }

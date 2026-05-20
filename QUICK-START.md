@@ -15,13 +15,16 @@ Set-ExecutionPolicy RemoteSigned -Scope CurrentUser
 
 ### Step 3: Run the Script
 ```powershell
-# Replace "MyVPN" with your actual VPN name
+# Basic usage with Cloudflare WARP
+.\VPN-AutoToggle.ps1
+
+# Or with a specific Windows VPN connection
 .\VPN-AutoToggle.ps1 -VpnName "MyVPN"
 ```
 
 ## 🧪 Quick Test (1-minute cycles)
 ```powershell
-.\VPN-AutoToggle.ps1 -VpnName "MyVPN" -CycleDurationMinutes 1
+.\VPN-AutoToggle.ps1 -VpnName "CloudflareWARP" -CycleDurationMinutes 1
 ```
 
 ## 🛑 Stop the Script
@@ -44,7 +47,7 @@ Press `Ctrl+C` at any time for graceful shutdown.
 
 ## 📝 Common Commands
 
-### With Saved Credentials
+### With Saved Credentials (Recommended)
 ```powershell
 .\VPN-AutoToggle.ps1 -VpnName "MyVPN"
 ```
@@ -74,23 +77,23 @@ Press `Ctrl+C` at any time for graceful shutdown.
 | Script won't connect | Verify VPN works manually: `rasdial "MyVPN"` |
 
 ## 📖 Need More Help?
-See [SETUP-AND-USAGE.md](SETUP-AND-USAGE.md) for detailed documentation.
+See [SETUP-AND-USAGE.md](SETUP-AND-USAGE.md) for detailed documentation and [SECURITY.md](SECURITY.md) for security best practices.
 
 ## ⚙️ Parameters Reference
 
 | Parameter | Required | Default | Description |
 |-----------|----------|---------|-------------|
-| `-VpnName` | ✅ Yes | - | Name of VPN connection |
-| `-Username` | ❌ No | - | VPN username (if not saved) |
-| `-Password` | ❌ No | - | VPN password (if not saved) |
+| `-VpnName` | ❌ No | `CloudflareWARP` | Name of VPN connection |
+| `-UseWarp` | ❌ No | Auto-detect | Use WARP (auto-enabled for CloudflareWARP) |
 | `-CycleDurationMinutes` | ❌ No | 10 | Minutes for each state |
+| `-MegasyncPath` | ❌ No | Auto-detect | Path to MEGAsync.exe |
 | `-LogPath` | ❌ No | `.\VPN-AutoToggle.log` | Log file location |
 | `-MaxRetries` | ❌ No | 3 | Connection retry attempts |
 
 ## 🔒 Security Tips
 
 1. ✅ **DO**: Save credentials in Windows VPN settings
-2. ✅ **DO**: Use `-VpnName "MyVPN"` without password parameters
+2. ✅ **DO**: Use `-VpnName` without password parameters
 3. ❌ **DON'T**: Hardcode passwords in scripts or shortcuts
 4. ❌ **DON'T**: Share log files (may contain sensitive info)
 

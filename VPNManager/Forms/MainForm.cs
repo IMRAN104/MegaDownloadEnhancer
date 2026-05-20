@@ -1,6 +1,8 @@
 using System;
 using System.Drawing;
+using System.Threading.Tasks;
 using System.Windows.Forms;
+using Microsoft.Win32;
 using VPNManager.Models;
 using VPNManager.Services;
 
@@ -13,7 +15,6 @@ namespace VPNManager.Forms
         private readonly MegaService _megaService;
         private readonly Timer _refreshTimer;
 
-        // UI Controls
         private Label lblTitle;
         private GroupBox grpVpnStatus;
         private Label lblVpnStatusTitle;
@@ -22,36 +23,36 @@ namespace VPNManager.Forms
         private Label lblVpnLastUpdate;
         private Label lblCycleStartTime;
         private Panel pnlVpnIndicator;
-
         private GroupBox grpMegaStatus;
         private Label lblMegaStatusTitle;
         private Label lblMegaStatus;
         private Label lblMegaProcessId;
         private Label lblMegaLastUpdate;
         private Panel pnlMegaIndicator;
-
         private GroupBox grpControls;
         private Button btnToggleCycle;
         private Button btnSettings;
         private Button btnRefresh;
-
         private DateTime? _cycleStartTime;
-
         private StatusStrip statusStrip;
         private ToolStripStatusLabel lblStatus;
         private ToolStripStatusLabel lblDateTime;
-
         private ContextMenuStrip trayContextMenu;
         private NotifyIcon trayIcon;
+        private bool _exiting;
+        private bool _toggling;
+        private VpnStatus _lastVpnStatus;
 
         public MainForm()
         {
             _settings = AppSettings.Load();
             _vpnService = new VpnService(_settings);
             _megaService = new MegaService(_settings);
+            _lastVpnStatus = new VpnStatus { IsConnected = false };
 
             InitializeComponent();
             InitializeTrayIcon();
+            ApplyTheme();
 
             _refreshTimer = new Timer();
             _refreshTimer.Interval = _settings.StatusRefreshIntervalSeconds * 1000;
@@ -61,37 +62,61 @@ namespace VPNManager.Forms
             FormClosing += MainForm_FormClosing;
             Resize += MainForm_Resize;
 
-            // Show first-time setup dialog if needed
             if (string.IsNullOrEmpty(_settings.VpnName))
             {
-                ShowFirstTimeSetup();
+                BeginInvoke(new Action(() => ShowFirstTimeSetup()));
             }
 
-            UpdateVpnStatus();
-            UpdateMegaStatus();
+            BeginInvoke(new Action(async () =>
+            {
+                await UpdateVpnStatusAsync();
+                UpdateMegaStatus();
+            }));
+
+            ApplyAutoStart();
         }
 
+        #region Theme
+        private void ApplyTheme()
+        {
+            if (_settings.ThemeMode == ThemeMode.System)
+            {
+                _settings.ThemeMode = ThemeUtils.IsSystemDarkMode() ? ThemeMode.Dark : ThemeMode.Light;
+            }
+            ThemeUtils.ApplyTheme(this, _settings.ThemeMode);
+        }
+
+        public void ReapplyTheme()
+        {
+            ApplyTheme();
+            foreach (Control c in this.Controls)
+                ThemeUtils.ApplyThemeToControl(c, _settings.ThemeMode);
+            foreach (Control c in grpVpnStatus.Controls)
+                ThemeUtils.ApplyThemeToControl(c, _settings.ThemeMode);
+            foreach (Control c in grpMegaStatus.Controls)
+                ThemeUtils.ApplyThemeToControl(c, _settings.ThemeMode);
+            foreach (Control c in grpControls.Controls)
+                ThemeUtils.ApplyThemeToControl(c, _settings.ThemeMode);
+        }
+        #endregion
+
+        #region Initialization
         private void InitializeComponent()
         {
-            // Form
             this.Text = "VPN Manager";
             this.Size = new Size(600, 500);
             this.StartPosition = FormStartPosition.CenterScreen;
             this.MinimumSize = new Size(500, 400);
-            this.BackColor = Color.FromArgb(240, 240, 240);
             this.Font = new Font("Segoe UI", 9F);
 
-            // Title Label
             lblTitle = new Label
             {
                 Text = "VPN Auto-Manager",
                 Font = new Font("Segoe UI", 16F, FontStyle.Bold),
-                ForeColor = Color.FromArgb(0, 120, 215),
                 AutoSize = true,
                 Location = new Point(20, 20)
             };
 
-            // VPN Status Group
             grpVpnStatus = CreateGroupBox("VPN Status", 20, 70, 550, 130);
 
             lblVpnStatusTitle = new Label
@@ -107,15 +132,13 @@ namespace VPNManager.Forms
                 Text = "Disconnected",
                 AutoSize = true,
                 Location = new Point(140, 30),
-                Font = new Font("Segoe UI", 9F, FontStyle.Bold),
-                ForeColor = Color.Red
+                Font = new Font("Segoe UI", 9F, FontStyle.Bold)
             };
 
             pnlVpnIndicator = new Panel
             {
                 Size = new Size(12, 12),
                 Location = new Point(120, 34),
-                BackColor = Color.Red,
                 BorderStyle = BorderStyle.FixedSingle
             };
 
@@ -130,17 +153,14 @@ namespace VPNManager.Forms
             {
                 Text = "Last Update: Never",
                 AutoSize = true,
-                Location = new Point(20, 85),
-                ForeColor = Color.Gray
+                Location = new Point(20, 85)
             };
 
             lblCycleStartTime = new Label
             {
                 Text = "Cycle: Not Started",
                 AutoSize = true,
-                Location = new Point(300, 60),
-                ForeColor = Color.Gray,
-                Font = new Font("Segoe UI", 9F)
+                Location = new Point(300, 60)
             };
 
             grpVpnStatus.Controls.AddRange(new Control[] {
@@ -148,7 +168,6 @@ namespace VPNManager.Forms
                 lblVpnConnectionName, lblVpnLastUpdate, lblCycleStartTime
             });
 
-            // Mega Status Group
             grpMegaStatus = CreateGroupBox("MEGAsync Status", 20, 210, 550, 130);
 
             lblMegaStatusTitle = new Label
@@ -164,15 +183,13 @@ namespace VPNManager.Forms
                 Text = "Not Running",
                 AutoSize = true,
                 Location = new Point(140, 30),
-                Font = new Font("Segoe UI", 9F, FontStyle.Bold),
-                ForeColor = Color.Red
+                Font = new Font("Segoe UI", 9F, FontStyle.Bold)
             };
 
             pnlMegaIndicator = new Panel
             {
                 Size = new Size(12, 12),
                 Location = new Point(120, 34),
-                BackColor = Color.Red,
                 BorderStyle = BorderStyle.FixedSingle
             };
 
@@ -187,8 +204,7 @@ namespace VPNManager.Forms
             {
                 Text = "Last Update: Never",
                 AutoSize = true,
-                Location = new Point(20, 85),
-                ForeColor = Color.Gray
+                Location = new Point(20, 85)
             };
 
             grpMegaStatus.Controls.AddRange(new Control[] {
@@ -196,21 +212,19 @@ namespace VPNManager.Forms
                 lblMegaProcessId, lblMegaLastUpdate
             });
 
-            // Controls Group
             grpControls = CreateGroupBox("Controls", 20, 350, 550, 80);
 
-            btnToggleCycle = CreateButton("Start Cycle", 20, 25, 140, 35, Color.FromArgb(0, 180, 0));
+            btnToggleCycle = CreateButton("Start Cycle", 20, 25, 140, 35);
             btnToggleCycle.Click += BtnToggleCycle_Click;
 
-            btnSettings = CreateButton("Settings", 180, 25, 100, 35, Color.FromArgb(100, 100, 100));
+            btnSettings = CreateButton("Settings", 180, 25, 100, 35);
             btnSettings.Click += BtnSettings_Click;
 
-            btnRefresh = CreateButton("Refresh Now", 300, 25, 120, 35, Color.FromArgb(0, 120, 215));
+            btnRefresh = CreateButton("Refresh Now", 300, 25, 120, 35);
             btnRefresh.Click += BtnRefresh_Click;
 
             grpControls.Controls.AddRange(new Control[] { btnToggleCycle, btnSettings, btnRefresh });
 
-            // Status Strip
             statusStrip = new StatusStrip();
             lblStatus = new ToolStripStatusLabel { Text = "Ready" };
             lblDateTime = new ToolStripStatusLabel
@@ -221,7 +235,6 @@ namespace VPNManager.Forms
             };
             statusStrip.Items.AddRange(new ToolStripItem[] { lblStatus, lblDateTime });
 
-            // Add controls to form
             this.Controls.Add(lblTitle);
             this.Controls.Add(grpVpnStatus);
             this.Controls.Add(grpMegaStatus);
@@ -236,21 +249,17 @@ namespace VPNManager.Forms
                 Text = text,
                 Location = new Point(x, y),
                 Size = new Size(width, height),
-                Font = new Font("Segoe UI", 9F, FontStyle.Bold),
-                ForeColor = Color.FromArgb(0, 0, 0),
-                BackColor = Color.White
+                Font = new Font("Segoe UI", 9F, FontStyle.Bold)
             };
         }
 
-        private Button CreateButton(string text, int x, int y, int width, int height, Color backColor)
+        private Button CreateButton(string text, int x, int y, int width, int height)
         {
             return new Button
             {
                 Text = text,
                 Location = new Point(x, y),
                 Size = new Size(width, height),
-                BackColor = backColor,
-                ForeColor = Color.White,
                 FlatStyle = FlatStyle.Flat,
                 Cursor = Cursors.Hand,
                 Font = new Font("Segoe UI", 9F, FontStyle.Bold)
@@ -264,6 +273,8 @@ namespace VPNManager.Forms
             trayContextMenu.Items.Add("Start VPN", null, TrayStart_Click);
             trayContextMenu.Items.Add("Stop VPN", null, TrayStop_Click);
             trayContextMenu.Items.Add(new ToolStripSeparator());
+            trayContextMenu.Items.Add("Auto-start with Windows", null, TrayAutoStart_Click);
+            trayContextMenu.Items.Add(new ToolStripSeparator());
             trayContextMenu.Items.Add("Exit", null, TrayExit_Click);
 
             trayIcon = new NotifyIcon
@@ -271,60 +282,81 @@ namespace VPNManager.Forms
                 Text = "VPN Manager",
                 Icon = SystemIcons.Application,
                 ContextMenuStrip = trayContextMenu,
-                Visible = false
+                Visible = true
             };
 
-            trayIcon.DoubleClick += (s, e) => this.Show();
+            trayIcon.DoubleClick += (s, e) =>
+            {
+                _exiting = false;
+                this.Show();
+                this.WindowState = FormWindowState.Normal;
+            };
         }
+        #endregion
 
+        #region Form Events
         private void MainForm_Load(object sender, EventArgs e)
         {
-            if (_settings.StartMinimized && _settings.MinimizeToTray)
+            if (_settings.StartMinimized)
             {
                 this.WindowState = FormWindowState.Minimized;
+                this.Hide();
             }
 
             _refreshTimer.Start();
             UpdateButtonStates();
+            UpdateTrayAutoStartCheck();
         }
 
         private void MainForm_FormClosing(object sender, FormClosingEventArgs e)
         {
-            if (_settings.MinimizeToTray && e.CloseReason == CloseReason.UserClosing)
+            if (!_exiting)
             {
                 e.Cancel = true;
                 this.Hide();
-                trayIcon.Visible = true;
-            }
-            else
-            {
-                _refreshTimer.Stop();
-                trayIcon.Visible = false;
-                _vpnService.StopVpnCycle();
+                if (_vpnService.IsRunning)
+                {
+                    trayIcon.ShowBalloonTip(3000, "VPN Manager", "VPN cycle still running in background", ToolTipIcon.Info);
+                }
             }
         }
 
         private void MainForm_Resize(object sender, EventArgs e)
         {
-            if (this.WindowState == FormWindowState.Minimized && _settings.MinimizeToTray)
+            if (this.WindowState == FormWindowState.Minimized)
             {
                 this.Hide();
-                trayIcon.Visible = true;
             }
         }
+        #endregion
 
-        private void RefreshTimer_Tick(object? sender, EventArgs e)
+        #region Shutdown
+        public void Shutdown()
         {
-            UpdateVpnStatus();
+            _exiting = true;
+            _refreshTimer.Stop();
+            trayIcon.Visible = false;
+            _vpnService.StopVpnCycle();
+            _vpnService.Dispose();
+            this.Close();
+        }
+        #endregion
+
+        #region Refresh loop
+        private async void RefreshTimer_Tick(object? sender, EventArgs e)
+        {
+            await UpdateVpnStatusAsync();
             UpdateMegaStatus();
             lblDateTime.Text = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
         }
+        #endregion
 
-        private void UpdateVpnStatus()
+        #region Status Updates
+        private async Task UpdateVpnStatusAsync()
         {
             try
             {
-                var status = _vpnService.GetCurrentStatus(_settings.VpnName);
+                var status = await _vpnService.GetCurrentStatusAsync(_settings.VpnName);
 
                 if (status.IsConnected)
                 {
@@ -344,6 +376,13 @@ namespace VPNManager.Forms
                     : "Connection: Not Configured";
 
                 lblVpnLastUpdate.Text = $"Last Update: {DateTime.Now:HH:mm:ss}";
+
+                if (_vpnService.IsRunning && _lastVpnStatus.IsConnected != status.IsConnected)
+                {
+                    var state = status.IsConnected ? "connected" : "disconnected";
+                    trayIcon.ShowBalloonTip(3000, "VPN Manager", $"VPN {state}", ToolTipIcon.Info);
+                }
+                _lastVpnStatus = status;
             }
             catch (Exception ex)
             {
@@ -392,6 +431,7 @@ namespace VPNManager.Forms
             btnToggleCycle.Enabled = !string.IsNullOrEmpty(_settings.VpnName);
             btnToggleCycle.Text = isRunning ? "Stop Cycle" : "Start Cycle";
             btnToggleCycle.BackColor = isRunning ? Color.FromArgb(200, 50, 50) : Color.FromArgb(0, 180, 0);
+            btnToggleCycle.ForeColor = Color.White;
 
             if (_cycleStartTime.HasValue && isRunning)
             {
@@ -404,44 +444,30 @@ namespace VPNManager.Forms
                 lblCycleStartTime.ForeColor = Color.Gray;
             }
         }
+        #endregion
 
+        #region Button Handlers
         private async void BtnToggleCycle_Click(object? sender, EventArgs e)
         {
-            if (_vpnService.IsRunning)
+            if (_toggling)
+                return;
+            _toggling = true;
+
+            try
             {
-                // Stop the cycle
-                try
+                if (_vpnService.IsRunning)
                 {
                     lblStatus.Text = "Stopping VPN cycle...";
                     _vpnService.StopVpnCycle();
                     _cycleStartTime = null;
                     lblStatus.Text = "VPN cycle stopped";
                     UpdateButtonStates();
-
-                    // Wait for VPN to disconnect
-                    await System.Threading.Tasks.Task.Delay(3000);
-
-                    // Force immediate status update (MEGAsync is NOT restarted on stop)
-                    UpdateVpnStatus();
+                    await Task.Delay(3000);
+                    await UpdateVpnStatusAsync();
                     UpdateMegaStatus();
                 }
-                catch (Exception ex)
+                else
                 {
-                    MessageBox.Show(
-                        $"Failed to stop VPN cycle: {ex.Message}",
-                        "Error",
-                        MessageBoxButtons.OK,
-                        MessageBoxIcon.Error
-                    );
-                    lblStatus.Text = "Failed to stop";
-                }
-            }
-            else
-            {
-                // Start the cycle
-                try
-                {
-                    // Validate settings before starting
                     var validationError = ValidateSettings();
                     if (!string.IsNullOrEmpty(validationError))
                     {
@@ -454,7 +480,7 @@ namespace VPNManager.Forms
 
                         if (result == DialogResult.Yes)
                         {
-                            BtnSettings_Click(sender, e);
+                            ShowSettings();
                         }
                         return;
                     }
@@ -464,41 +490,44 @@ namespace VPNManager.Forms
                     _cycleStartTime = DateTime.Now;
                     lblStatus.Text = "VPN cycle running";
                     UpdateButtonStates();
-
-                    // Wait for VPN to connect (PowerShell script handles this)
-                    await System.Threading.Tasks.Task.Delay(3000);
-
-                    // Restart MEGAsync after VPN connects
-                    _megaService.RestartMegasync();
-
-                    // Wait a bit for MEGAsync to start
-                    await System.Threading.Tasks.Task.Delay(2000);
-
-                    // Force immediate status update
-                    UpdateVpnStatus();
+                    await Task.Delay(3000);
+                    await _megaService.RestartMegasyncAsync();
+                    await Task.Delay(2000);
+                    await UpdateVpnStatusAsync();
                     UpdateMegaStatus();
                 }
-                catch (Exception ex)
-                {
-                    MessageBox.Show(
-                        $"Failed to start VPN cycle: {ex.Message}",
-                        "Error",
-                        MessageBoxButtons.OK,
-                        MessageBoxIcon.Error
-                    );
-                    lblStatus.Text = "Failed to start";
-                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(
+                    $"Operation failed: {ex.Message}",
+                    "Error",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Error
+                );
+                lblStatus.Text = "Operation failed";
+            }
+            finally
+            {
+                _toggling = false;
             }
         }
 
         private void BtnSettings_Click(object? sender, EventArgs e)
+        {
+            ShowSettings();
+        }
+
+        private void ShowSettings()
         {
             var settingsForm = new SettingsForm(_settings);
             if (settingsForm.ShowDialog(this) == DialogResult.OK)
             {
                 _settings.Save();
                 _refreshTimer.Interval = _settings.StatusRefreshIntervalSeconds * 1000;
-                UpdateVpnStatus();
+                ApplyAutoStart();
+                BeginInvoke(new Action(() => ReapplyTheme()));
+                BeginInvoke(new Action(async () => await UpdateVpnStatusAsync()));
                 UpdateButtonStates();
                 lblStatus.Text = "Settings saved";
             }
@@ -506,17 +535,18 @@ namespace VPNManager.Forms
 
         private void BtnRefresh_Click(object? sender, EventArgs e)
         {
-            UpdateVpnStatus();
+            BeginInvoke(new Action(async () => await UpdateVpnStatusAsync()));
             UpdateMegaStatus();
             lblStatus.Text = "Status refreshed";
         }
+        #endregion
 
-        // Tray icon event handlers
+        #region Tray Handlers
         private void TrayShow_Click(object? sender, EventArgs e)
         {
+            _exiting = false;
             this.Show();
             this.WindowState = FormWindowState.Normal;
-            trayIcon.Visible = false;
         }
 
         private void TrayStart_Click(object? sender, EventArgs e)
@@ -535,12 +565,62 @@ namespace VPNManager.Forms
             }
         }
 
-        private void TrayExit_Click(object? sender, EventArgs e)
+        private void TrayAutoStart_Click(object? sender, EventArgs e)
         {
-            _settings.MinimizeToTray = false; // Override to allow closing
-            this.Close();
+            _settings.AutoStart = !_settings.AutoStart;
+            _settings.Save();
+            ApplyAutoStart();
+            UpdateTrayAutoStartCheck();
+            trayIcon.ShowBalloonTip(2000, "VPN Manager",
+                _settings.AutoStart ? "Will auto-start with Windows" : "Auto-start disabled",
+                ToolTipIcon.Info);
         }
 
+        private void TrayExit_Click(object? sender, EventArgs e)
+        {
+            Shutdown();
+        }
+        #endregion
+
+        #region Auto-start
+        private void ApplyAutoStart()
+        {
+            try
+            {
+                using var key = Registry.CurrentUser.OpenSubKey(
+                    @"Software\Microsoft\Windows\CurrentVersion\Run", true);
+
+                if (_settings.AutoStart)
+                {
+                    var exePath = Application.ExecutablePath;
+                    key?.SetValue("VPNManager", $"\"{exePath}\"");
+                }
+                else
+                {
+                    key?.DeleteValue("VPNManager", false);
+                }
+            }
+            catch
+            {
+            }
+        }
+
+        private void UpdateTrayAutoStartCheck()
+        {
+            foreach (ToolStripItem item in trayContextMenu.Items)
+            {
+                if (item.Text?.StartsWith("Auto-start") == true || item.Text?.StartsWith("✓ Auto-start") == true || item.Text?.StartsWith("  Auto-start") == true)
+                {
+                    item.Text = _settings.AutoStart
+                        ? "✓ Auto-start with Windows"
+                        : "  Auto-start with Windows";
+                    break;
+                }
+            }
+        }
+        #endregion
+
+        #region Settings Validation & First-time Setup
         private string? ValidateSettings()
         {
             if (string.IsNullOrEmpty(_settings.VpnName))
@@ -555,7 +635,7 @@ namespace VPNManager.Forms
                        $"For Windows VPN: Check your Windows VPN settings.";
             }
 
-            return null; // No error
+            return null;
         }
 
         private void ShowFirstTimeSetup()
@@ -574,16 +654,10 @@ namespace VPNManager.Forms
 
             if (result == DialogResult.Yes)
             {
-                var settingsForm = new SettingsForm(_settings);
-                if (settingsForm.ShowDialog(this) == DialogResult.OK)
-                {
-                    _settings.Save();
-                    _refreshTimer.Interval = _settings.StatusRefreshIntervalSeconds * 1000;
-                    UpdateVpnStatus();
-                    UpdateButtonStates();
-                }
+                ShowSettings();
             }
         }
+        #endregion
 
         protected override void Dispose(bool disposing)
         {
@@ -592,6 +666,7 @@ namespace VPNManager.Forms
                 _refreshTimer?.Dispose();
                 trayIcon?.Dispose();
                 trayContextMenu?.Dispose();
+                _vpnService?.Dispose();
             }
             base.Dispose(disposing);
         }

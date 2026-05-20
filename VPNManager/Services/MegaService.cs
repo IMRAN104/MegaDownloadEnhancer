@@ -1,6 +1,7 @@
 using System;
 using System.Diagnostics;
 using System.IO;
+using System.Threading.Tasks;
 using VPNManager.Models;
 
 namespace VPNManager.Services
@@ -40,7 +41,6 @@ namespace VPNManager.Services
                     status.ProcessName = _settings.MonitoredProcessDisplayName;
                     status.Status = "Running";
 
-                    // Try to determine if it's syncing
                     status.IsSyncing = IsProcessSyncing(processes[0]);
                     status.Status = status.IsSyncing ? "Syncing" : "Idle";
                 }
@@ -63,7 +63,6 @@ namespace VPNManager.Services
         {
             try
             {
-                // Check window title or main window title for sync indicators
                 var mainWindowTitle = process.MainWindowTitle;
                 if (!string.IsNullOrEmpty(mainWindowTitle))
                 {
@@ -75,7 +74,6 @@ namespace VPNManager.Services
             }
             catch (Exception)
             {
-                // Ignore errors
             }
 
             return false;
@@ -96,9 +94,7 @@ namespace VPNManager.Services
                     return true;
                 }
 
-                // Check if process exists in common locations
                 var commonPaths = GetCommonProcessPaths();
-
                 foreach (var path in commonPaths)
                 {
                     if (File.Exists(path))
@@ -116,7 +112,6 @@ namespace VPNManager.Services
         public string FindExecutablePath()
         {
             var commonPaths = GetCommonProcessPaths();
-
             foreach (var path in commonPaths)
             {
                 if (File.Exists(path))
@@ -163,24 +158,22 @@ namespace VPNManager.Services
             return "Not Installed";
         }
 
-        public void RestartMegasync()
+        public async Task RestartMegasyncAsync()
         {
             try
             {
                 var processName = _settings.MonitoredProcessName;
-                
-                // Kill existing process
+
                 var processes = Process.GetProcessesByName(processName);
                 foreach (var process in processes)
                 {
                     try
                     {
                         process.Kill();
-                        process.WaitForExit(5000);
+                        process.WaitForExit(3000);
                     }
                     catch (Exception)
                     {
-                        // Ignore if process already exited
                     }
                     finally
                     {
@@ -188,10 +181,8 @@ namespace VPNManager.Services
                     }
                 }
 
-                // Wait before restart
-                System.Threading.Thread.Sleep(5000); // 5 second delay
+                await Task.Delay(5000);
 
-                // Find and start MEGAsync
                 var executablePath = FindExecutablePath();
                 if (!string.IsNullOrEmpty(executablePath) && File.Exists(executablePath))
                 {
@@ -205,7 +196,6 @@ namespace VPNManager.Services
             }
             catch (Exception)
             {
-                // Silently fail - MEGAsync restart is not critical
             }
         }
     }

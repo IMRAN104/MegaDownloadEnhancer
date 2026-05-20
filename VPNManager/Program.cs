@@ -1,4 +1,5 @@
 using System;
+using System.Threading;
 using System.Windows.Forms;
 using VPNManager.Forms;
 
@@ -6,6 +7,8 @@ namespace VPNManager
 {
     static class Program
     {
+        private static Mutex? _mutex;
+
         [STAThread]
         static void Main()
         {
@@ -13,9 +16,7 @@ namespace VPNManager
             Application.SetCompatibleTextRenderingDefault(false);
             Application.SetHighDpiMode(HighDpiMode.SystemAware);
 
-            // Check for single instance
-            bool createdNew;
-            var mutex = new System.Threading.Mutex(true, "VPNManager_SingleInstance", out createdNew);
+            _mutex = new Mutex(true, "VPNManager_SingleInstance", out bool createdNew);
 
             if (!createdNew)
             {
@@ -30,7 +31,8 @@ namespace VPNManager
 
             try
             {
-                Application.Run(new MainForm());
+                var mainForm = new MainForm();
+                Application.Run(mainForm);
             }
             catch (Exception ex)
             {
@@ -43,8 +45,8 @@ namespace VPNManager
             }
             finally
             {
-                mutex.ReleaseMutex();
-                mutex.Dispose();
+                _mutex.ReleaseMutex();
+                _mutex.Dispose();
             }
         }
     }

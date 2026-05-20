@@ -96,16 +96,24 @@ Specify a custom log file path:
 .\VPN-AutoToggle.ps1 -VpnName "MyVPN" -LogPath "C:\Logs\VPN-Toggle.log"
 ```
 
+### With Credentials (Not Recommended)
+
+If you must provide credentials explicitly (better to save them in Windows):
+
+```powershell
+.\VPN-AutoToggle.ps1 -VpnName "MyVPN" -Username "user@domain.com" -Password "YourPassword"
+```
+
 ### All Parameters
 
 ```powershell
+```powershell
 .\VPN-AutoToggle.ps1 `
     -VpnName "MyVPN" `
-    -Username "user@domain.com" `
-    -Password "SecurePass123" `
     -CycleDurationMinutes 10 `
     -LogPath "C:\Logs\VPN-Toggle.log" `
     -MaxRetries 3
+```
 ```
 
 ## Testing Approach
@@ -250,6 +258,9 @@ Start-Process powershell -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File
    - Program: `powershell.exe`
    - Arguments: `-NoProfile -ExecutionPolicy Bypass -File "C:\Scripts\VPN-AutoToggle\VPN-AutoToggle.ps1" -VpnName "MyVPN"`
 5. Configure to run whether user is logged in or not
+
+### Option 3: Use VPNManager GUI
+Download the latest release and use the graphical interface which supports minimizing to system tray.
 
 ## Security Considerations
 
