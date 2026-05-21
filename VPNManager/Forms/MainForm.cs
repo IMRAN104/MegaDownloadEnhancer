@@ -1,5 +1,7 @@
 using System;
 using System.Drawing;
+using System.Drawing.Drawing2D;
+using System.Drawing.Text;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using Microsoft.Win32;
@@ -10,396 +12,255 @@ namespace VPNManager.Forms
 {
     public partial class MainForm : Form
     {
+        // ── Services ─────────────────────────────────────────────
         private readonly AppSettings _settings;
         private readonly VpnService _vpnService;
         private readonly MegaService _megaService;
+
+        // ── Timers ───────────────────────────────────────────────
         private readonly Timer _refreshTimer;
+        private readonly Timer _pulseTimer;
+        private readonly Timer _clockTimer;
 
-        // Layout panels
-        private TableLayoutPanel _mainLayout;
-        private Panel _headerPanel;
-        private Panel _contentPanel;
-        private Panel _footerPanel;
-
-        // Header
-        private Label _lblAppTitle;
-        private Label _lblSubtitle;
-
-        // Status cards
-        private Panel _cardVpn;
-        private Panel _cardMega;
-        private Label _lblVpnLabel;
-        private Label _lblVpnValue;
-        private Label _lblVpnDetail;
-        private Panel _dotVpn;
-        private Label _lblMegaLabel;
-        private Label _lblMegaValue;
-        private Label _lblMegaDetail;
-        private Panel _dotMega;
-
-        // Controls
-        private Panel _cardControls;
-        private Button _btnToggle;
-        private Button _btnSettings;
-        private Button _btnRefresh;
-        private Label _lblCycleInfo;
-
-        // Footer
-        private StatusStrip _statusStrip;
-        private ToolStripStatusLabel _lblStatus;
-        private ToolStripStatusLabel _lblFooterRight;
-        private Label _lblVersion;
-        private LinkLabel _lnkAbout;
-
+        // ── UI State ─────────────────────────────────────────────
+        private bool _pulseOn;
         private DateTime? _cycleStartTime;
-        private ContextMenuStrip _trayContextMenu;
-        private NotifyIcon _trayIcon;
-        private bool _exiting;
         private bool _toggling;
-        private VpnStatus _lastVpnStatus;
+        private VpnStatus _lastVpnStatus = new();
+        private bool _vpnConnected;
+        private bool _megaRunning;
+        private bool _megaSyncing;
 
-        private static readonly Color Accent = Color.FromArgb(0, 120, 215);
-        private static readonly Color AccentDark = Color.FromArgb(0, 90, 180);
-        private static readonly Color Success = Color.FromArgb(16, 185, 129);
-        private static readonly Color Danger = Color.FromArgb(239, 68, 68);
-        private static readonly Color Warning = Color.FromArgb(245, 158, 11);
-        private static readonly Color CardBg = Color.White;
-        private static readonly Color CardBgDark = Color.FromArgb(40, 40, 40);
+        // ── Controls ─────────────────────────────────────────────
+        private Panel _headerPanel = null!;
+        private Panel _vpnCard = null!;
+        private Panel _megaCard = null!;
+        private Panel _cycleCard = null!;
+        private Panel _footerPanel = null!;
+        private Button _btnToggle = null!;
+        private Button _btnSettings = null!;
+        private Button _btnRefresh = null!;
+        private Label _lblFooterLeft = null!;
+        private Label _lblFooterRight = null!;
+
+        // ── Tray ─────────────────────────────────────────────────
+        private NotifyIcon _trayIcon = null!;
+        private ContextMenuStrip _trayMenu = null!;
+        private bool _exiting;
+
+        // ── Palette ──────────────────────────────────────────────
+        static readonly Color C_BG      = Color.FromArgb(7,   11,  18);
+        static readonly Color C_SURFACE = Color.FromArgb(13,  20,  32);
+        static readonly Color C_SURF2   = Color.FromArgb(18,  27,  44);
+        static readonly Color C_BORDER  = Color.FromArgb(28,  40,  68);
+        static readonly Color C_ACCENT  = Color.FromArgb(0,  207, 168);
+        static readonly Color C_BLUE    = Color.FromArgb(59, 130, 246);
+        static readonly Color C_DANGER  = Color.FromArgb(255,  58,  90);
+        static readonly Color C_TEXT1   = Color.FromArgb(226, 235, 248);
+        static readonly Color C_TEXT2   = Color.FromArgb(80,  105, 145);
+        static readonly Color C_DIM     = Color.FromArgb(24,  36,  58);
 
         public MainForm()
         {
             _settings = AppSettings.Load();
             _vpnService = new VpnService(_settings);
             _megaService = new MegaService(_settings);
-            _lastVpnStatus = new VpnStatus { IsConnected = false };
 
             InitializeComponent();
             InitializeTrayIcon();
-            ApplyTheme();
 
-            _refreshTimer = new Timer { Interval = _settings.StatusRefreshIntervalSeconds * 1000 };
-            _refreshTimer.Tick += RefreshTimer_Tick;
+            _refreshTimer = new Timer { Interval = Math.Max(1000, _settings.StatusRefreshIntervalSeconds * 1000) };
+            _refreshTimer.Tick += async (s, e) => { await UpdateVpnStatusAsync(); UpdateMegaStatus(); };
 
-            Load += MainForm_Load;
-            FormClosing += MainForm_FormClosing;
-            Resize += MainForm_Resize;
+            _pulseTimer = new Timer { Interval = 650 };
+            _pulseTimer.Tick += (s, e) =>
+            {
+                _pulseOn = !_pulseOn;
+                _vpnCard?.Invalidate();
+                _megaCard?.Invalidate();
+            };
+
+            _clockTimer = new Timer { Interval = 1000 };
+            _clockTimer.Tick += (s, e) =>
+            {
+                if (_lblFooterRight != null)
+                    _lblFooterRight.Text = DateTime.Now.ToString("yyyy-MM-dd  HH:mm:ss");
+                _cycleCard?.Invalidate();
+            };
 
             ApplyAutoStart();
+            Load      += MainForm_Load;
+            FormClosing += MainForm_FormClosing;
+            Resize    += (s, e) => { if (WindowState == FormWindowState.Minimized) Hide(); };
         }
 
-        #region Theme
-        private void ApplyTheme()
-        {
-            if (_settings.ThemeMode == ThemeMode.System)
-                _settings.ThemeMode = ThemeUtils.IsSystemDarkMode() ? ThemeMode.Dark : ThemeMode.Light;
+        // ── Init ─────────────────────────────────────────────────
 
-            var isDark = _settings.ThemeMode == ThemeMode.Dark;
-            var bg = isDark ? Color.FromArgb(24, 24, 27) : Color.FromArgb(248, 250, 252);
-            var cardBg = isDark ? CardBgDark : CardBg;
-            var fg = isDark ? Color.FromArgb(228, 228, 231) : Color.FromArgb(24, 24, 27);
-            var fgSubtle = isDark ? Color.FromArgb(161, 161, 170) : Color.FromArgb(113, 113, 122);
-
-            BackColor = bg;
-            ForeColor = fg;
-
-            _mainLayout.BackColor = bg;
-            _headerPanel.BackColor = bg;
-            _contentPanel.BackColor = bg;
-
-            _lblAppTitle.ForeColor = isDark ? Color.White : Color.FromArgb(15, 23, 42);
-            _lblSubtitle.ForeColor = fgSubtle;
-
-            _cardVpn.BackColor = cardBg;
-            _cardMega.BackColor = cardBg;
-            _cardControls.BackColor = cardBg;
-            _lblCycleInfo.ForeColor = fgSubtle;
-
-            // Style cards with subtle border
-            foreach (var card in new[] { _cardVpn, _cardMega, _cardControls })
-            {
-                card.BackColor = cardBg;
-            }
-
-            _lblVersion.ForeColor = fgSubtle;
-            _lnkAbout.LinkColor = isDark ? Color.FromArgb(96, 165, 250) : Accent;
-
-            _footerPanel.BackColor = isDark ? Color.FromArgb(30, 30, 33) : Color.FromArgb(241, 245, 249);
-            _statusStrip.BackColor = isDark ? Color.FromArgb(30, 30, 33) : Color.FromArgb(241, 245, 249);
-            _statusStrip.ForeColor = fgSubtle;
-        }
-
-        public void ReapplyTheme()
-        {
-            ApplyTheme();
-            foreach (Control c in this.Controls)
-                ThemeUtils.ApplyThemeToControl(c, _settings.ThemeMode);
-        }
-        #endregion
-
-        #region Initialization
         private void InitializeComponent()
         {
+            Icon = AppIcon.Create(32);
             Text = "Mega Download Enhancer";
-            Size = new Size(720, 520);
-            MinimumSize = new Size(640, 480);
+            ClientSize = new Size(500, 560);
+            MinimumSize = new Size(460, 520);
             StartPosition = FormStartPosition.CenterScreen;
+            BackColor = C_BG;
+            ForeColor = C_TEXT1;
             Font = new Font("Segoe UI", 9F);
-            Icon = SystemIcons.Application;
+            DoubleBuffered = true;
+            SetStyle(ControlStyles.OptimizedDoubleBuffer | ControlStyles.AllPaintingInWmPaint, true);
 
-            // ── Main layout ──
-            _mainLayout = new TableLayoutPanel
+            // ── Header ──────────────────────────────────────────
+            _headerPanel = DB(new Panel { Dock = DockStyle.Top, Height = 72, BackColor = C_SURFACE });
+            _headerPanel.Paint += PaintHeader;
+
+            // ── Footer ──────────────────────────────────────────
+            _footerPanel = DB(new Panel { Dock = DockStyle.Bottom, Height = 30, BackColor = C_SURFACE });
+            _footerPanel.Paint += (s, e) =>
             {
-                Dock = DockStyle.Fill,
-                ColumnCount = 1,
-                RowCount = 3,
-                Padding = new Padding(0),
-                Margin = new Padding(0)
+                using var p = new Pen(C_BORDER, 1f);
+                e.Graphics.DrawLine(p, 0, 0, _footerPanel.Width, 0);
             };
-            _mainLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 72));
-            _mainLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-            _mainLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));
-            Controls.Add(_mainLayout);
 
-            // ── Header ──
-            _headerPanel = new Panel { Dock = DockStyle.Fill, Padding = new Padding(24, 12, 24, 4) };
-            _mainLayout.Controls.Add(_headerPanel, 0, 0);
-
-            _lblAppTitle = new Label
+            _lblFooterLeft = new Label
             {
-                Text = "Mega Download Enhancer",
-                Font = new Font("Segoe UI", 20F, FontStyle.Bold),
+                Text = "Ready",
                 AutoSize = true,
-                Location = new Point(24, 12)
+                Location = new Point(16, 8),
+                Font = new Font("Segoe UI", 8F),
+                ForeColor = C_TEXT2,
+                BackColor = Color.Transparent
             };
 
-            _lblSubtitle = new Label
+            var ver = Application.ProductVersion;
+            var cleanVer = ver.Contains('+') ? ver[..ver.IndexOf('+')] : ver;
+
+            _lblFooterRight = new Label
             {
-                Text = "VPN Auto-Cycler & MEGAsync Companion",
-                Font = new Font("Segoe UI", 10F),
+                Text = DateTime.Now.ToString("yyyy-MM-dd  HH:mm:ss"),
                 AutoSize = true,
-                Location = new Point(24, 42),
-                ForeColor = Color.FromArgb(113, 113, 122)
+                Location = new Point(290, 8),
+                Font = new Font("Consolas", 7.5F),
+                ForeColor = C_TEXT2,
+                BackColor = Color.Transparent,
+                Anchor = AnchorStyles.Top | AnchorStyles.Right
             };
-            _headerPanel.Controls.Add(_lblAppTitle);
-            _headerPanel.Controls.Add(_lblSubtitle);
 
-            // ── Content area ──
-            _contentPanel = new Panel { Dock = DockStyle.Fill, Padding = new Padding(24, 8, 24, 8) };
-            _mainLayout.Controls.Add(_contentPanel, 0, 1);
-
-            // Status cards
-            _cardVpn = CreateCard("VPN", "Disconnected", "Connection: —", 0, 0, ref _dotVpn, ref _lblVpnLabel, ref _lblVpnValue, ref _lblVpnDetail);
-            _cardMega = CreateCard("MEGAsync", "Not Running", "Process: —", 248, 0, ref _dotMega, ref _lblMegaLabel, ref _lblMegaValue, ref _lblMegaDetail);
-            _contentPanel.Controls.Add(_cardVpn);
-            _contentPanel.Controls.Add(_cardMega);
-
-            // Controls card
-            _cardControls = new Panel
+            var lblVer = new Label
             {
-                Location = new Point(0, 148),
-                Size = new Size(490, 60),
-                BackColor = CardBg,
-                Padding = new Padding(16, 12, 16, 12)
+                Text = $"v{cleanVer}",
+                AutoSize = true,
+                Location = new Point(16, 8),
+                Font = new Font("Consolas", 7.5F),
+                ForeColor = C_TEXT2,
+                BackColor = Color.Transparent,
+                Anchor = AnchorStyles.Top | AnchorStyles.Right
             };
-            _contentPanel.Controls.Add(_cardControls);
 
-            _btnToggle = new Button
-            {
-                Text = "Start Cycle",
-                Size = new Size(140, 36),
-                Location = new Point(16, 12),
-                FlatStyle = FlatStyle.Flat,
-                Cursor = Cursors.Hand,
-                Font = new Font("Segoe UI", 9F, FontStyle.Bold),
-                BackColor = Success,
-                ForeColor = Color.White
-            };
-            _btnToggle.FlatAppearance.BorderSize = 0;
-            _btnToggle.Click += BtnToggleCycle_Click;
+            _footerPanel.Controls.Add(_lblFooterLeft);
+            _footerPanel.Controls.Add(_lblFooterRight);
 
-            _btnSettings = new Button
-            {
-                Text = "Settings",
-                Size = new Size(90, 36),
-                Location = new Point(168, 12),
-                FlatStyle = FlatStyle.Flat,
-                Cursor = Cursors.Hand,
-                Font = new Font("Segoe UI", 9F),
-                BackColor = Color.FromArgb(100, 116, 139),
-                ForeColor = Color.White
-            };
-            _btnSettings.FlatAppearance.BorderSize = 0;
-            _btnSettings.Click += BtnSettings_Click;
+            // ── Content ─────────────────────────────────────────
+            var content = DB(new Panel { Dock = DockStyle.Fill, BackColor = C_BG });
 
-            _btnRefresh = new Button
-            {
-                Text = "⟳ Refresh",
-                Size = new Size(100, 36),
-                Location = new Point(270, 12),
-                FlatStyle = FlatStyle.Flat,
-                Cursor = Cursors.Hand,
-                Font = new Font("Segoe UI", 9F),
-                BackColor = Accent,
-                ForeColor = Color.White
-            };
-            _btnRefresh.FlatAppearance.BorderSize = 0;
+            // VPN card
+            _vpnCard = DB(new Panel { BackColor = Color.Transparent });
+            _vpnCard.Paint += PaintVpnCard;
+
+            // MEGA card
+            _megaCard = DB(new Panel { BackColor = Color.Transparent });
+            _megaCard.Paint += PaintMegaCard;
+
+            // Cycle card
+            _cycleCard = DB(new Panel { BackColor = Color.Transparent });
+            _cycleCard.Paint += PaintCycleCard;
+            _cycleCard.Anchor = AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Top;
+
+            // Buttons
+            _btnToggle = MakeBtn("▶  Start Cycle", C_ACCENT, Color.FromArgb(7, 11, 18));
+            _btnToggle.Size = new Size(148, 38);
+            _btnToggle.Anchor = AnchorStyles.Left | AnchorStyles.Bottom;
+            _btnToggle.Click += BtnToggle_Click;
+
+            _btnSettings = MakeBtn("⚙  Settings", C_SURF2, C_TEXT1);
+            _btnSettings.Size = new Size(102, 38);
+            _btnSettings.Anchor = AnchorStyles.Left | AnchorStyles.Bottom;
+            _btnSettings.Click += (s, e) => ShowSettings();
+
+            _btnRefresh = MakeBtn("⟳  Refresh", C_SURF2, C_TEXT1);
+            _btnRefresh.Size = new Size(102, 38);
+            _btnRefresh.Anchor = AnchorStyles.Left | AnchorStyles.Bottom;
             _btnRefresh.Click += BtnRefresh_Click;
 
-            _cardControls.Controls.Add(_btnToggle);
-            _cardControls.Controls.Add(_btnSettings);
-            _cardControls.Controls.Add(_btnRefresh);
+            content.Controls.Add(_vpnCard);
+            content.Controls.Add(_megaCard);
+            content.Controls.Add(_cycleCard);
+            content.Controls.Add(_btnToggle);
+            content.Controls.Add(_btnSettings);
+            content.Controls.Add(_btnRefresh);
 
-            // Cycle info
-            _lblCycleInfo = new Label
-            {
-                Text = "Cycle: Not Running",
-                AutoSize = true,
-                Location = new Point(0, 216),
-                Font = new Font("Segoe UI", 9F),
-                ForeColor = Color.FromArgb(113, 113, 122)
-            };
-            _contentPanel.Controls.Add(_lblCycleInfo);
+            Controls.Add(content);
+            Controls.Add(_footerPanel);
+            Controls.Add(_headerPanel);
 
-            // Version + About
-            _lblVersion = new Label
-            {
-                Text = $"v{Application.ProductVersion}",
-                AutoSize = true,
-                Location = new Point(0, 240),
-                Font = new Font("Segoe UI", 8F),
-                ForeColor = Color.FromArgb(161, 161, 170)
-            };
-            _contentPanel.Controls.Add(_lblVersion);
-
-            _lnkAbout = new LinkLabel
-            {
-                Text = "About",
-                AutoSize = true,
-                Location = new Point(70, 240),
-                Font = new Font("Segoe UI", 8F),
-                LinkColor = Accent
-            };
-            _lnkAbout.Click += (s, e) => new AboutDialog().ShowDialog(this);
-            _contentPanel.Controls.Add(_lnkAbout);
-
-            // Anchor content for resizing
-            _cardVpn.Anchor = AnchorStyles.Left | AnchorStyles.Top;
-            _cardMega.Anchor = AnchorStyles.Left | AnchorStyles.Top;
-            _cardControls.Anchor = AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Top;
-            _lblCycleInfo.Anchor = AnchorStyles.Left | AnchorStyles.Top;
-            _lblVersion.Anchor = AnchorStyles.Left | AnchorStyles.Top;
-            _lnkAbout.Anchor = AnchorStyles.Left | AnchorStyles.Top;
-
-            // ── Footer ──
-            _footerPanel = new Panel { Dock = DockStyle.Fill };
-            _mainLayout.Controls.Add(_footerPanel, 0, 2);
-
-            _statusStrip = new StatusStrip { Dock = DockStyle.Fill, GripStyle = ToolStripGripStyle.Hidden };
-            _lblStatus = new ToolStripStatusLabel { Text = "Ready", Spring = true, TextAlign = ContentAlignment.MiddleLeft };
-            _lblFooterRight = new ToolStripStatusLabel { Text = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"), TextAlign = ContentAlignment.MiddleRight };
-            _statusStrip.Items.AddRange(new ToolStripItem[] { _lblStatus, _lblFooterRight });
-            _footerPanel.Controls.Add(_statusStrip);
+            RepositionCards();
         }
 
-        private Panel CreateCard(string label, string value, string detail, int x, int y,
-            ref Panel dot, ref Label labelCtrl, ref Label valueCtrl, ref Label detailCtrl)
+        protected override void OnResize(EventArgs e)
         {
-            var card = new Panel
-            {
-                Location = new Point(x, y),
-                Size = new Size(236, 136),
-                BackColor = CardBg,
-                Padding = new Padding(16, 14, 16, 14)
-            };
+            base.OnResize(e);
+            RepositionCards();
+        }
 
-            // Colored top bar
-            var bar = new Panel
-            {
-                Size = new Size(236, 3),
-                Location = new Point(0, 0),
-                BackColor = Accent,
-                Anchor = AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Top
-            };
-            card.Controls.Add(bar);
+        private void RepositionCards()
+        {
+            if (_vpnCard == null) return;
+            int cw = ClientSize.Width;
+            const int margin = 16, gap = 10;
+            int cardW = (cw - 2 * margin - gap) / 2;
+            int cardH = 116;
 
-            // Status dot
-            dot = new Panel
-            {
-                Size = new Size(10, 10),
-                Location = new Point(16, 20),
-                BackColor = Danger
-            };
+            _vpnCard.SetBounds(margin, 16, cardW, cardH);
+            _megaCard.SetBounds(margin + cardW + gap, 16, cardW, cardH);
+            _cycleCard.SetBounds(margin, 148, cw - 2 * margin, 88);
 
-            labelCtrl = new Label
-            {
-                Text = label,
-                AutoSize = true,
-                Location = new Point(32, 18),
-                Font = new Font("Segoe UI", 8F),
-                ForeColor = Color.FromArgb(113, 113, 122)
-            };
+            int btnY = 254;
+            _btnToggle.Location = new Point(margin, btnY);
+            _btnSettings.Location = new Point(margin + 148 + 8, btnY);
+            _btnRefresh.Location = new Point(margin + 148 + 8 + 102 + 8, btnY);
 
-            valueCtrl = new Label
-            {
-                Text = value,
-                AutoSize = true,
-                Location = new Point(16, 56),
-                Font = new Font("Segoe UI", 20F, FontStyle.Bold),
-                ForeColor = Danger
-            };
-
-            detailCtrl = new Label
-            {
-                Text = detail,
-                AutoSize = true,
-                Location = new Point(16, 100),
-                Font = new Font("Segoe UI", 8F),
-                ForeColor = Color.FromArgb(161, 161, 170)
-            };
-
-            card.Controls.Add(dot);
-            card.Controls.Add(labelCtrl);
-            card.Controls.Add(valueCtrl);
-            card.Controls.Add(detailCtrl);
-            return card;
+            _lblFooterRight.Left = cw - _lblFooterRight.Width - 16;
         }
 
         private void InitializeTrayIcon()
         {
-            _trayContextMenu = new ContextMenuStrip();
-            _trayContextMenu.Items.Add("Show", null, TrayShow_Click);
-            _trayContextMenu.Items.Add("Start VPN", null, TrayStart_Click);
-            _trayContextMenu.Items.Add("Stop VPN", null, TrayStop_Click);
-            _trayContextMenu.Items.Add(new ToolStripSeparator());
-            _trayContextMenu.Items.Add("Auto-start with Windows", null, TrayAutoStart_Click);
-            _trayContextMenu.Items.Add(new ToolStripSeparator());
-            _trayContextMenu.Items.Add("About", null, (s, e) => new AboutDialog().ShowDialog(this));
-            _trayContextMenu.Items.Add("Exit", null, TrayExit_Click);
+            _trayMenu = new ContextMenuStrip();
+            StyleContextMenu(_trayMenu);
+            Add(_trayMenu, "Show",                        (s, e) => ShowWindow());
+            Add(_trayMenu, "▶  Start Cycle",              (s, e) => { if (!_vpnService.IsRunning) BtnToggle_Click(s, e); });
+            Add(_trayMenu, "■  Stop Cycle",               (s, e) => { if (_vpnService.IsRunning)  BtnToggle_Click(s, e); });
+            _trayMenu.Items.Add(new ToolStripSeparator());
+            Add(_trayMenu, "    Auto-start with Windows", ToggleAutoStart);
+            _trayMenu.Items.Add(new ToolStripSeparator());
+            Add(_trayMenu, "Exit",                        (s, e) => Shutdown());
 
             _trayIcon = new NotifyIcon
             {
                 Text = "Mega Download Enhancer",
-                Icon = SystemIcons.Application,
-                ContextMenuStrip = _trayContextMenu,
+                Icon = AppIcon.Create(16),
+                ContextMenuStrip = _trayMenu,
                 Visible = true
             };
-
-            _trayIcon.DoubleClick += (s, e) =>
-            {
-                _exiting = false;
-                Show();
-                WindowState = FormWindowState.Normal;
-            };
+            _trayIcon.DoubleClick += (s, e) => ShowWindow();
         }
 
-        private void MainForm_Load(object sender, EventArgs e)
+        // ── Load & Close ─────────────────────────────────────────
+
+        private void MainForm_Load(object? sender, EventArgs e)
         {
-            if (_settings.StartMinimized)
-            {
-                WindowState = FormWindowState.Minimized;
-                Hide();
-            }
+            if (_settings.StartMinimized) { WindowState = FormWindowState.Minimized; Hide(); }
             _refreshTimer.Start();
+            _pulseTimer.Start();
+            _clockTimer.Start();
             UpdateButtonStates();
             UpdateTrayAutoStartCheck();
 
@@ -413,192 +274,331 @@ namespace VPNManager.Forms
             }));
         }
 
-        private void MainForm_FormClosing(object sender, FormClosingEventArgs e)
+        private void MainForm_FormClosing(object? sender, FormClosingEventArgs e)
         {
             if (!_exiting)
             {
                 e.Cancel = true;
                 Hide();
                 if (_vpnService.IsRunning)
-                    _trayIcon.ShowBalloonTip(3000, "Mega Download Enhancer", "VPN cycle still running in background", ToolTipIcon.Info);
+                    _trayIcon.ShowBalloonTip(3000, "Mega Download Enhancer", "Still cycling in background", ToolTipIcon.Info);
             }
         }
 
-        private void MainForm_Resize(object sender, EventArgs e)
+        // ── Painting ─────────────────────────────────────────────
+
+        private void PaintHeader(object? sender, PaintEventArgs e)
         {
-            if (WindowState == FormWindowState.Minimized) Hide();
+            var g = e.Graphics;
+            g.SmoothingMode = SmoothingMode.AntiAlias;
+            g.TextRenderingHint = TextRenderingHint.ClearTypeGridFit;
+
+            int w = _headerPanel.Width, h = _headerPanel.Height;
+            using var bg = new LinearGradientBrush(
+                new Point(0, 0), new Point(w, h),
+                C_SURFACE, Color.FromArgb(10, 16, 28));
+            g.FillRectangle(bg, 0, 0, w, h);
+
+            // Bottom separator
+            using var sep = new Pen(C_BORDER, 1f);
+            g.DrawLine(sep, 0, h - 1, w, h - 1);
+
+            // Tiny accent bar at top
+            using var accentBar = new LinearGradientBrush(
+                new Point(0, 0), new Point(w, 0),
+                C_ACCENT, Color.FromArgb(0, C_ACCENT));
+            g.FillRectangle(accentBar, 0, 0, w, 2);
+
+            // Logo icon
+            DrawBolt(g, 16, 18, 36);
+
+            // Title
+            using var titleFont = new Font("Segoe UI", 15F, FontStyle.Bold);
+            using var titleBrush = new SolidBrush(C_TEXT1);
+            g.DrawString("Mega Download Enhancer", titleFont, titleBrush, 62, 10);
+
+            // Subtitle
+            using var subFont = new Font("Segoe UI", 8.5F);
+            using var subBrush = new SolidBrush(C_TEXT2);
+            g.DrawString("VPN Auto-Cycler  ·  MEGAsync Companion", subFont, subBrush, 64, 40);
         }
 
-        protected override void OnResize(EventArgs e)
+        private void DrawBolt(Graphics g, int x, int y, int sz)
         {
-            base.OnResize(e);
-            // Stretch controls card to fill available width
-            if (_cardControls != null && _contentPanel != null)
+            using var bgBrush = new SolidBrush(Color.FromArgb(255, 8, 12, 20));
+            using var path = AppIcon.RoundedRect(new Rectangle(x, y, sz, sz), sz / 5);
+            g.FillPath(bgBrush, path);
+
+            using var borderPen = new Pen(Color.FromArgb(60, 0, 207, 168), 1f);
+            g.DrawPath(borderPen, path);
+
+            float s = sz;
+            PointF[] bolt =
             {
-                _cardControls.Width = _contentPanel.ClientSize.Width - 24;
+                new(x + s * 0.58f, y + s * 0.07f),
+                new(x + s * 0.27f, y + s * 0.51f),
+                new(x + s * 0.50f, y + s * 0.51f),
+                new(x + s * 0.42f, y + s * 0.93f),
+                new(x + s * 0.73f, y + s * 0.49f),
+                new(x + s * 0.50f, y + s * 0.49f),
+            };
+            using var boltBrush = new LinearGradientBrush(
+                new PointF(x, y), new PointF(x, y + sz),
+                C_ACCENT, Color.FromArgb(0, 148, 120));
+            g.FillPolygon(boltBrush, bolt);
+        }
+
+        private void PaintVpnCard(object? sender, PaintEventArgs e)
+        {
+            var statusColor = _vpnConnected ? C_ACCENT : C_DANGER;
+            PaintCard(e.Graphics, _vpnCard.ClientRectangle,
+                "VPN",
+                _vpnConnected ? "Connected" : "Offline",
+                string.IsNullOrEmpty(_settings.VpnName) ? "Not configured" : _settings.VpnName,
+                statusColor,
+                _vpnConnected && _vpnService.IsRunning);
+        }
+
+        private void PaintMegaCard(object? sender, PaintEventArgs e)
+        {
+            var color = _megaSyncing ? C_BLUE : _megaRunning ? C_ACCENT : C_DANGER;
+            PaintCard(e.Graphics, _megaCard.ClientRectangle,
+                "MEGAsync",
+                _megaSyncing ? "Syncing" : _megaRunning ? "Running" : "Offline",
+                _settings.MonitoredProcessDisplayName,
+                color,
+                _megaRunning || _megaSyncing);
+        }
+
+        private void PaintCard(Graphics g, Rectangle b, string label,
+            string status, string detail, Color accent, bool animated)
+        {
+            g.SmoothingMode = SmoothingMode.AntiAlias;
+            g.TextRenderingHint = TextRenderingHint.ClearTypeGridFit;
+
+            // Card background
+            using var bgBrush = new SolidBrush(C_SURFACE);
+            using var cardPath = AppIcon.RoundedRect(b, 6);
+            g.FillPath(bgBrush, cardPath);
+
+            // Border
+            using var borderPen = new Pen(C_BORDER, 1f);
+            g.DrawPath(borderPen, cardPath);
+
+            // Top accent strip
+            using var stripBrush = new SolidBrush(accent);
+            g.FillRectangle(stripBrush, b.X + 6, b.Y, b.Width - 12, 3);
+
+            // Label
+            using var lblFont = new Font("Segoe UI", 7.5F, FontStyle.Bold);
+            using var lblBrush = new SolidBrush(C_TEXT2);
+            g.DrawString(label.ToUpper(), lblFont, lblBrush, b.X + 14, b.Y + 14);
+
+            // Pulse dot
+            bool dotVisible = !animated || _pulseOn;
+            if (dotVisible)
+            {
+                int dotSz = 8, dotX = b.Right - 22, dotY = b.Y + 15;
+                using var glowBrush = new SolidBrush(Color.FromArgb(35, accent));
+                g.FillEllipse(glowBrush, dotX - 4, dotY - 4, dotSz + 8, dotSz + 8);
+                using var dotBrush = new SolidBrush(accent);
+                g.FillEllipse(dotBrush, dotX, dotY, dotSz, dotSz);
             }
-        }
-        #endregion
 
-        #region Shutdown
-        public void Shutdown()
+            // Status value
+            float fSize = status.Length > 9 ? 16F : 20F;
+            using var valFont = new Font("Segoe UI", fSize, FontStyle.Bold);
+            using var valBrush = new SolidBrush(accent);
+            g.DrawString(status, valFont, valBrush, b.X + 14, b.Y + 36);
+
+            // Detail
+            using var detFont = new Font("Consolas", 7.5F);
+            using var detBrush = new SolidBrush(C_TEXT2);
+            var detStr = detail.Length > 20 ? detail[..20] + "…" : detail;
+            g.DrawString(detStr, detFont, detBrush, b.X + 14, b.Y + 92);
+        }
+
+        private void PaintCycleCard(object? sender, PaintEventArgs e)
         {
-            _exiting = true;
-            _refreshTimer.Stop();
-            _trayIcon.Visible = false;
-            _vpnService.StopVpnCycle();
-            _vpnService.Dispose();
-            Close();
-        }
-        #endregion
+            var g = e.Graphics;
+            g.SmoothingMode = SmoothingMode.AntiAlias;
+            g.TextRenderingHint = TextRenderingHint.ClearTypeGridFit;
 
-        #region Refresh
-        private async void RefreshTimer_Tick(object? sender, EventArgs e)
-        {
-            await UpdateVpnStatusAsync();
-            UpdateMegaStatus();
-            _lblFooterRight.Text = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
-        }
-        #endregion
+            var b = _cycleCard.ClientRectangle;
+            bool running = _vpnService.IsRunning;
+            Color accent = running ? C_ACCENT : C_DIM;
 
-        #region Status Updates
+            using var bgBrush = new SolidBrush(C_SURFACE);
+            using var cardPath = AppIcon.RoundedRect(b, 6);
+            g.FillPath(bgBrush, cardPath);
+            using var borderPen = new Pen(C_BORDER, 1f);
+            g.DrawPath(borderPen, cardPath);
+
+            // Top strip
+            using var stripBrush = new SolidBrush(accent);
+            g.FillRectangle(stripBrush, b.X + 6, b.Y, b.Width - 12, 3);
+
+            // CYCLE label
+            using var lblFont = new Font("Segoe UI", 7.5F, FontStyle.Bold);
+            using var lblBrush = new SolidBrush(C_TEXT2);
+            g.DrawString("CYCLE", lblFont, lblBrush, b.X + 14, b.Y + 13);
+
+            // State badge
+            using var stFont = new Font("Segoe UI", 7.5F, FontStyle.Bold);
+            using var stBrush = new SolidBrush(running ? C_ACCENT : C_TEXT2);
+            g.DrawString(running ? "● ACTIVE" : "○ IDLE", stFont, stBrush, b.X + 60, b.Y + 13);
+
+            // Progress bar track
+            int barX = b.X + 14, barY = b.Y + 34, barW = b.Width - 80, barH = 5;
+            using var trackBrush = new SolidBrush(C_DIM);
+            using var trackPath = AppIcon.RoundedRect(new Rectangle(barX, barY, barW, barH), 2);
+            g.FillPath(trackBrush, trackPath);
+
+            // Progress fill + countdown
+            float progress = 0f;
+            string timeLabel = "—";
+            if (running && _cycleStartTime.HasValue)
+            {
+                double totalSec = _settings.CycleDurationMinutes * 60.0;
+                double elapsed  = (DateTime.Now - _cycleStartTime.Value).TotalSeconds % totalSec;
+                progress = (float)(elapsed / totalSec);
+                double remain  = totalSec - elapsed;
+                timeLabel = remain < 60 ? $"{(int)remain}s" : $"{(int)(remain / 60)}m {(int)(remain % 60):D2}s";
+            }
+
+            int fillW = Math.Max(0, (int)(barW * progress));
+            if (fillW > 4)
+            {
+                using var fillBrush = new LinearGradientBrush(
+                    new Point(barX, barY), new Point(barX + barW, barY),
+                    C_ACCENT, Color.FromArgb(0, 160, 130));
+                using var fillPath = AppIcon.RoundedRect(new Rectangle(barX, barY, fillW, barH), 2);
+                g.FillPath(fillBrush, fillPath);
+            }
+
+            // Countdown label
+            using var timeFont = new Font("Consolas", 8F);
+            using var timeBrush = new SolidBrush(running ? C_ACCENT : C_TEXT2);
+            g.DrawString(timeLabel, timeFont, timeBrush, barX + barW + 8, barY - 4);
+
+            // Info line
+            using var infoFont = new Font("Segoe UI", 8F);
+            using var infoBrush = new SolidBrush(C_TEXT2);
+            string infoText = running && _cycleStartTime.HasValue
+                ? $"Active since {_cycleStartTime.Value:HH:mm:ss}  ·  Toggle every {_settings.CycleDurationMinutes} min"
+                : "Click  ▶  to start cycling your IP for uninterrupted MEGA downloads";
+            g.DrawString(infoText, infoFont, infoBrush, b.X + 14, b.Y + 52);
+        }
+
+        // ── Status Updates ───────────────────────────────────────
+
         private async Task UpdateVpnStatusAsync()
         {
             try
             {
                 var status = await _vpnService.GetCurrentStatusAsync(_settings.VpnName);
-                _lblVpnValue.Text = status.IsConnected ? "Connected" : "Disconnected";
-                _lblVpnValue.ForeColor = status.IsConnected ? Success : Danger;
-                _dotVpn.BackColor = status.IsConnected ? Success : Danger;
-                _lblVpnDetail.Text = !string.IsNullOrEmpty(_settings.VpnName)
-                    ? $"Connection: {_settings.VpnName}  •  {DateTime.Now:HH:mm:ss}"
-                    : "Connection: Not Configured";
-
-                if (_vpnService.IsRunning && _lastVpnStatus.IsConnected != status.IsConnected)
-                {
-                    var state = status.IsConnected ? "connected" : "disconnected";
-                    _trayIcon.ShowBalloonTip(3000, "Mega Download Enhancer", $"VPN {state}", ToolTipIcon.Info);
-                }
+                bool was = _vpnConnected;
+                _vpnConnected = status.IsConnected;
                 _lastVpnStatus = status;
+                _vpnCard?.Invalidate();
+
+                if (_vpnService.IsRunning && was != _vpnConnected)
+                    _trayIcon?.ShowBalloonTip(2000, "Mega Download Enhancer",
+                        _vpnConnected ? "VPN connected" : "VPN disconnected", ToolTipIcon.Info);
+
+                SetStatus(_vpnConnected ? "VPN connected" : "VPN offline");
             }
-            catch (Exception ex)
-            {
-                _lblVpnValue.Text = "Error";
-                _lblVpnValue.ForeColor = Warning;
-                _dotVpn.BackColor = Warning;
-                _lblStatus.Text = $"Error: {ex.Message}";
-            }
+            catch (Exception ex) { SetStatus($"Error: {ex.Message}"); }
         }
 
         private void UpdateMegaStatus()
         {
             try
             {
-                var status = _megaService.GetCurrentStatus();
-                if (status.IsRunning)
-                {
-                    _lblMegaValue.Text = status.IsSyncing ? "Syncing" : "Running";
-                    _lblMegaValue.ForeColor = status.IsSyncing ? Accent : Success;
-                    _dotMega.BackColor = status.IsSyncing ? Accent : Success;
-                    _lblMegaDetail.Text = $"{_settings.MonitoredProcessDisplayName} (PID: {status.ProcessId})  •  {DateTime.Now:HH:mm:ss}";
-                }
-                else
-                {
-                    _lblMegaValue.Text = "Not Running";
-                    _lblMegaValue.ForeColor = Danger;
-                    _dotMega.BackColor = Danger;
-                    _lblMegaDetail.Text = $"{_settings.MonitoredProcessDisplayName} — Not Running  •  {DateTime.Now:HH:mm:ss}";
-                }
+                var s = _megaService.GetCurrentStatus();
+                _megaRunning = s.IsRunning;
+                _megaSyncing = s.IsSyncing;
+                _megaCard?.Invalidate();
             }
-            catch (Exception ex)
-            {
-                _lblMegaValue.Text = "Error";
-                _lblMegaValue.ForeColor = Warning;
-                _dotMega.BackColor = Warning;
-                _lblStatus.Text = $"Error: {ex.Message}";
-            }
+            catch { }
         }
 
         private void UpdateButtonStates()
         {
-            var isRunning = _vpnService.IsRunning;
-            _btnToggle.Enabled = !string.IsNullOrEmpty(_settings.VpnName);
-            _btnToggle.Text = isRunning ? "■ Stop Cycle" : "▶ Start Cycle";
-            _btnToggle.BackColor = isRunning ? Danger : Success;
-
-            if (_cycleStartTime.HasValue && isRunning)
-            {
-                _lblCycleInfo.Text = $"Cycle active since {_cycleStartTime.Value:HH:mm:ss}  •  Toggle every {_settings.CycleDurationMinutes} min";
-                _lblCycleInfo.ForeColor = Success;
-            }
-            else
-            {
-                _lblCycleInfo.Text = "Cycle: Not Running";
-                _lblCycleInfo.ForeColor = Color.FromArgb(113, 113, 122);
-            }
+            bool running = _vpnService.IsRunning;
+            _btnToggle.Text = running ? "■  Stop Cycle" : "▶  Start Cycle";
+            _btnToggle.BackColor = running ? C_DANGER : C_ACCENT;
+            _btnToggle.ForeColor = running ? C_TEXT1 : Color.FromArgb(7, 11, 18);
+            _cycleCard?.Invalidate();
         }
-        #endregion
 
-        #region Button Handlers
-        private async void BtnToggleCycle_Click(object? sender, EventArgs e)
+        private void SetStatus(string msg)
+        {
+            if (_lblFooterLeft == null) return;
+            if (_lblFooterLeft.InvokeRequired)
+                _lblFooterLeft.BeginInvoke(() => _lblFooterLeft.Text = msg);
+            else
+                _lblFooterLeft.Text = msg;
+        }
+
+        // ── Button Handlers ──────────────────────────────────────
+
+        private async void BtnToggle_Click(object? sender, EventArgs e)
         {
             if (_toggling) return;
             _toggling = true;
-
             try
             {
                 if (_vpnService.IsRunning)
                 {
-                    _lblStatus.Text = "Stopping VPN cycle...";
+                    SetStatus("Stopping cycle…");
                     _vpnService.StopVpnCycle();
                     _cycleStartTime = null;
-                    _lblStatus.Text = "Cycle stopped";
+                    SetStatus("Cycle stopped");
                     UpdateButtonStates();
-                    await Task.Delay(3000);
+                    await Task.Delay(2000);
                     await UpdateVpnStatusAsync();
                     UpdateMegaStatus();
                 }
                 else
                 {
-                    var validationError = ValidateSettings();
-                    if (!string.IsNullOrEmpty(validationError))
+                    var err = ValidateSettings();
+                    if (err != null)
                     {
-                        var result = MessageBox.Show(
-                            $"{validationError}\n\nOpen Settings now?",
-                            "Configuration Required",
-                            MessageBoxButtons.YesNo,
-                            MessageBoxIcon.Warning
-                        );
-                        if (result == DialogResult.Yes) ShowSettings();
+                        var r = MessageBox.Show($"{err}\n\nOpen Settings?",
+                            "Configuration Required", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
+                        if (r == DialogResult.Yes) ShowSettings();
                         return;
                     }
-
-                    _lblStatus.Text = "Starting VPN cycle...";
+                    SetStatus("Starting cycle…");
                     _vpnService.StartVpnCycle(_settings);
                     _cycleStartTime = DateTime.Now;
-                    _lblStatus.Text = "Cycle running";
+                    SetStatus("Cycle running");
                     UpdateButtonStates();
-                    await Task.Delay(3000);
-                    await _megaService.RestartMegasyncAsync();
                     await Task.Delay(2000);
+                    await _megaService.RestartMegasyncAsync();
+                    await Task.Delay(1500);
                     await UpdateVpnStatusAsync();
                     UpdateMegaStatus();
                 }
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Operation failed: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                _lblStatus.Text = "Operation failed";
+                MessageBox.Show($"Operation failed: {ex.Message}", "Error",
+                    MessageBoxButtons.OK, MessageBoxIcon.Error);
+                SetStatus("Error");
             }
             finally { _toggling = false; }
         }
 
-        private void BtnSettings_Click(object? sender, EventArgs e) => ShowSettings();
         private void BtnRefresh_Click(object? sender, EventArgs e)
         {
-            BeginInvoke(new Action(async () => await UpdateVpnStatusAsync()));
-            UpdateMegaStatus();
-            _lblStatus.Text = "Refreshed";
+            BeginInvoke(new Action(async () =>
+            {
+                await UpdateVpnStatusAsync();
+                UpdateMegaStatus();
+                SetStatus("Refreshed");
+            }));
         }
 
         private void ShowSettings()
@@ -607,21 +607,29 @@ namespace VPNManager.Forms
             if (f.ShowDialog(this) == DialogResult.OK)
             {
                 _settings.Save();
-                _refreshTimer.Interval = _settings.StatusRefreshIntervalSeconds * 1000;
+                _refreshTimer.Interval = Math.Max(1000, _settings.StatusRefreshIntervalSeconds * 1000);
                 ApplyAutoStart();
-                BeginInvoke(new Action(() => ReapplyTheme()));
-                BeginInvoke(new Action(async () => await UpdateVpnStatusAsync()));
                 UpdateButtonStates();
-                _lblStatus.Text = "Settings saved";
+                BeginInvoke(new Action(async () =>
+                {
+                    await UpdateVpnStatusAsync();
+                    UpdateMegaStatus();
+                }));
+                SetStatus("Settings saved");
             }
         }
-        #endregion
 
-        #region Tray
-        private void TrayShow_Click(object? s, EventArgs e) { _exiting = false; Show(); WindowState = FormWindowState.Normal; }
-        private void TrayStart_Click(object? s, EventArgs e) { if (!_vpnService.IsRunning) BtnToggleCycle_Click(s, e); }
-        private void TrayStop_Click(object? s, EventArgs e) { if (_vpnService.IsRunning) BtnToggleCycle_Click(s, e); }
-        private void TrayAutoStart_Click(object? s, EventArgs e)
+        // ── Tray ─────────────────────────────────────────────────
+
+        private void ShowWindow()
+        {
+            _exiting = false;
+            Show();
+            WindowState = FormWindowState.Normal;
+            BringToFront();
+        }
+
+        private void ToggleAutoStart(object? sender, EventArgs e)
         {
             _settings.AutoStart = !_settings.AutoStart;
             _settings.Save();
@@ -630,15 +638,27 @@ namespace VPNManager.Forms
             _trayIcon.ShowBalloonTip(2000, "Mega Download Enhancer",
                 _settings.AutoStart ? "Will auto-start with Windows" : "Auto-start disabled", ToolTipIcon.Info);
         }
-        private void TrayExit_Click(object? s, EventArgs e) => Shutdown();
-        #endregion
 
-        #region Auto-start
+        private void UpdateTrayAutoStartCheck()
+        {
+            foreach (ToolStripItem item in _trayMenu.Items)
+            {
+                if (item.Text?.Contains("Auto-start") == true)
+                {
+                    item.Text = _settings.AutoStart
+                        ? "✓  Auto-start with Windows"
+                        : "    Auto-start with Windows";
+                    break;
+                }
+            }
+        }
+
         private void ApplyAutoStart()
         {
             try
             {
-                using var key = Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Run", true);
+                using var key = Registry.CurrentUser.OpenSubKey(
+                    @"Software\Microsoft\Windows\CurrentVersion\Run", true);
                 if (_settings.AutoStart)
                     key?.SetValue("MegaDownloadEnhancer", $"\"{Application.ExecutablePath}\"");
                 else
@@ -647,54 +667,100 @@ namespace VPNManager.Forms
             catch { }
         }
 
-        private void UpdateTrayAutoStartCheck()
-        {
-            foreach (ToolStripItem item in _trayContextMenu.Items)
-            {
-                var t = item.Text ?? "";
-                if (t.StartsWith("Auto-start") || t.StartsWith("✓ Auto-start") || t.StartsWith("  Auto-start"))
-                {
-                    item.Text = _settings.AutoStart ? "✓ Auto-start with Windows" : "  Auto-start with Windows";
-                    break;
-                }
-            }
-        }
-        #endregion
+        // ── Validation ───────────────────────────────────────────
 
-        #region Validation & First-time
         private string? ValidateSettings()
         {
             if (string.IsNullOrEmpty(_settings.VpnName))
-                return "VPN name is not configured.\nPlease select a VPN connection in Settings.";
+                return "VPN not configured.\nSelect one in Settings.";
             if (!_vpnService.IsVpnAvailable(_settings.VpnName))
-                return $"VPN connection '{_settings.VpnName}' is not available.\n\nFor WARP: Ensure 'warp-cli.exe' is in your PATH.\nFor Windows VPN: Check your Windows VPN settings.";
+                return $"'{_settings.VpnName}' not available.\nFor WARP: ensure warp-cli.exe is in PATH.";
             return null;
         }
 
         private void ShowFirstTimeSetup()
         {
-            var result = MessageBox.Show(
+            var r = MessageBox.Show(
                 "Welcome to Mega Download Enhancer!\n\n" +
-                "Configure your VPN connection to get started:\n" +
-                "• VPN connection (CloudflareWARP or Windows VPN)\n" +
-                "• Cycle duration & refresh interval\n" +
-                "• MEGAsync process monitoring\n\n" +
+                "Configure a VPN connection to begin.\n" +
+                "Recommended: Cloudflare WARP (free).\n\n" +
                 "Open Settings now?",
                 "First-Time Setup", MessageBoxButtons.YesNo, MessageBoxIcon.Information);
-            if (result == DialogResult.Yes) ShowSettings();
+            if (r == DialogResult.Yes) ShowSettings();
         }
-        #endregion
+
+        // ── Shutdown ─────────────────────────────────────────────
+
+        public void Shutdown()
+        {
+            _exiting = true;
+            _refreshTimer.Stop(); _pulseTimer.Stop(); _clockTimer.Stop();
+            _trayIcon.Visible = false;
+            _vpnService.StopVpnCycle();
+            _vpnService.Dispose();
+            Close();
+        }
 
         protected override void Dispose(bool disposing)
         {
             if (disposing)
             {
                 _refreshTimer?.Dispose();
+                _pulseTimer?.Dispose();
+                _clockTimer?.Dispose();
                 _trayIcon?.Dispose();
-                _trayContextMenu?.Dispose();
+                _trayMenu?.Dispose();
                 _vpnService?.Dispose();
             }
             base.Dispose(disposing);
+        }
+
+        // ── Helpers ──────────────────────────────────────────────
+
+        static Panel DB(Panel p)
+        {
+            typeof(Panel).GetProperty("DoubleBuffered",
+                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
+                ?.SetValue(p, true);
+            return p;
+        }
+
+        static Button MakeBtn(string text, Color bg, Color fg)
+        {
+            var b = new Button
+            {
+                Text = text,
+                BackColor = bg,
+                ForeColor = fg,
+                FlatStyle = FlatStyle.Flat,
+                Font = new Font("Segoe UI", 9F, FontStyle.Bold),
+                Cursor = Cursors.Hand,
+                UseVisualStyleBackColor = false
+            };
+            b.FlatAppearance.BorderSize = 0;
+            b.FlatAppearance.MouseOverBackColor = Lighten(bg, 20);
+            b.FlatAppearance.MouseDownBackColor  = Darken(bg, 15);
+            return b;
+        }
+
+        static Color Lighten(Color c, int amt) =>
+            Color.FromArgb(c.A, Math.Min(255, c.R + amt), Math.Min(255, c.G + amt), Math.Min(255, c.B + amt));
+        static Color Darken(Color c, int amt) =>
+            Color.FromArgb(c.A, Math.Max(0, c.R - amt), Math.Max(0, c.G - amt), Math.Max(0, c.B - amt));
+
+        static void Add(ContextMenuStrip m, string text, EventHandler h)
+        {
+            var item = new ToolStripMenuItem(text);
+            item.Click += h;
+            m.Items.Add(item);
+        }
+
+        static void StyleContextMenu(ContextMenuStrip m)
+        {
+            m.BackColor = Color.FromArgb(13, 20, 32);
+            m.ForeColor = Color.FromArgb(226, 235, 248);
+            m.Font = new Font("Segoe UI", 9F);
+            m.RenderMode = ToolStripRenderMode.System;
         }
     }
 }

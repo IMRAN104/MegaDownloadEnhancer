@@ -1,5 +1,7 @@
 using System;
 using System.Drawing;
+using System.Drawing.Drawing2D;
+using System.Drawing.Text;
 using System.Windows.Forms;
 using VPNManager.Models;
 using VPNManager.Services;
@@ -11,352 +13,532 @@ namespace VPNManager.Forms
         private readonly AppSettings _settings;
         private readonly VpnService _vpnService;
 
-        private TabControl _tabControl;
-        private TabPage _tabVpn;
-        private TabPage _tabGeneral;
-        private TabPage _tabAppearance;
-        private TabPage _tabAbout;
+        // ── Layout ───────────────────────────────────────────────
+        private Panel _sidebar = null!;
+        private Panel _contentArea = null!;
+        private Panel _activeSection = null!;
+        private string _currentSection = "VPN";
 
-        // VPN
-        private ComboBox _cmbVpnName;
-        private Label _lblVpnName;
-        private Button _btnRefreshVpns;
-        private TextBox _txtUsername;
-        private Label _lblUsername;
-        private TextBox _txtPassword;
-        private Label _lblPassword;
-        private NumericUpDown _numCycleDuration;
-        private Label _lblCycleDuration;
-        private NumericUpDown _numMaxRetries;
-        private Label _lblMaxRetries;
-        private CheckBox _chkUseSavedCredentials;
+        // ── VPN controls ─────────────────────────────────────────
+        private ComboBox _cmbVpnName = null!;
+        private Button _btnRefreshVpns = null!;
+        private NumericUpDown _numCycleDuration = null!;
+        private NumericUpDown _numMaxRetries = null!;
+        private CheckBox _chkUseSavedCreds = null!;
+        private TextBox _txtUsername = null!;
+        private TextBox _txtPassword = null!;
 
-        // General
-        private CheckBox _chkMinimizeToTray;
-        private CheckBox _chkStartMinimized;
-        private CheckBox _chkAutoStart;
-        private CheckBox _chkProcessMonitoringEnabled;
-        private NumericUpDown _numRefreshInterval;
-        private Label _lblRefreshInterval;
-        private TextBox _txtProcessName;
-        private Label _lblProcessName;
-        private TextBox _txtProcessDisplayName;
-        private Label _lblProcessDisplayName;
+        // ── General controls ─────────────────────────────────────
+        private CheckBox _chkMinimize = null!;
+        private CheckBox _chkStartMinimized = null!;
+        private CheckBox _chkAutoStart = null!;
+        private NumericUpDown _numRefresh = null!;
+        private CheckBox _chkMonitoring = null!;
+        private TextBox _txtProcessName = null!;
+        private TextBox _txtProcessDisplay = null!;
 
-        // Appearance
-        private ComboBox _cmbTheme;
-        private Label _lblTheme;
+        // ── Appearance ───────────────────────────────────────────
+        private ComboBox _cmbTheme = null!;
 
-        // Buttons
-        private Button _btnOk;
-        private Button _btnApply;
-        private Button _btnCancel;
+        // ── Palette ──────────────────────────────────────────────
+        static readonly Color C_BG      = Color.FromArgb(7,   11,  18);
+        static readonly Color C_SURFACE = Color.FromArgb(13,  20,  32);
+        static readonly Color C_SURF2   = Color.FromArgb(18,  27,  44);
+        static readonly Color C_BORDER  = Color.FromArgb(28,  40,  68);
+        static readonly Color C_ACCENT  = Color.FromArgb(0,  207, 168);
+        static readonly Color C_TEXT1   = Color.FromArgb(226, 235, 248);
+        static readonly Color C_TEXT2   = Color.FromArgb(80,  105, 145);
+        static readonly Color C_INPUT   = Color.FromArgb(16,  24,  38);
 
         public SettingsForm(AppSettings settings)
         {
             _settings = settings;
             _vpnService = new VpnService(settings);
-
             InitializeComponent();
             LoadSettings();
-            ThemeUtils.ApplyTheme(this, _settings.ThemeMode);
         }
 
         private void InitializeComponent()
         {
+            Icon = AppIcon.Create(16);
             Text = "Settings — Mega Download Enhancer";
-            Size = new Size(580, 460);
+            ClientSize = new Size(560, 440);
             StartPosition = FormStartPosition.CenterParent;
-            MinimumSize = new Size(520, 420);
-            Font = new Font("Segoe UI", 9F);
             FormBorderStyle = FormBorderStyle.FixedDialog;
             MaximizeBox = false;
             MinimizeBox = false;
-            BackColor = Color.FromArgb(248, 250, 252);
+            BackColor = C_BG;
+            ForeColor = C_TEXT1;
+            Font = new Font("Segoe UI", 9F);
+            DoubleBuffered = true;
 
-            _tabControl = new TabControl
+            // ── Header ──────────────────────────────────────────
+            var header = new Panel { Dock = DockStyle.Top, Height = 52, BackColor = C_SURFACE };
+            header.Paint += (s, e) =>
             {
-                Location = new Point(16, 16),
-                Size = new Size(540, 340),
-                Font = new Font("Segoe UI", 9F),
-                Anchor = AnchorStyles.Left | AnchorStyles.Top | AnchorStyles.Right
+                var g = e.Graphics;
+                g.TextRenderingHint = TextRenderingHint.ClearTypeGridFit;
+                using var titleFont = new Font("Segoe UI", 13F, FontStyle.Bold);
+                using var b = new SolidBrush(C_TEXT1);
+                g.DrawString("Settings", titleFont, b, 20, 14);
+                using var sep = new Pen(C_BORDER, 1f);
+                g.DrawLine(sep, 0, 51, header.Width, 51);
+                using var accentBar = new LinearGradientBrush(
+                    new Point(0, 0), new Point(header.Width, 0),
+                    C_ACCENT, Color.FromArgb(0, C_ACCENT));
+                g.FillRectangle(accentBar, 0, 0, header.Width, 2);
             };
 
-            _tabVpn = new TabPage("VPN");
-            BuildVpnTab();
-            _tabGeneral = new TabPage("General");
-            BuildGeneralTab();
-            _tabAppearance = new TabPage("Appearance");
-            BuildAppearanceTab();
-            _tabAbout = new TabPage("About");
-            BuildAboutTab();
-
-            _tabControl.TabPages.Add(_tabVpn);
-            _tabControl.TabPages.Add(_tabGeneral);
-            _tabControl.TabPages.Add(_tabAppearance);
-            _tabControl.TabPages.Add(_tabAbout);
-
-            _btnOk = CreateButton("OK", DialogResult.OK);
-            _btnApply = CreateButton("Apply", DialogResult.None);
-            _btnCancel = CreateButton("Cancel", DialogResult.Cancel);
-
-            // Position buttons at bottom-right
-            _btnCancel.Location = new Point(476, 370);
-            _btnOk.Location = new Point(394, 370);
-            _btnApply.Location = new Point(308, 370);
-            _btnCancel.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
-            _btnOk.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
-            _btnApply.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
-
-            _btnOk.Click += (s, e) => { SaveSettings(); DialogResult = DialogResult.OK; Close(); };
-            _btnApply.Click += (s, e) => { SaveSettings(); _settings.Save(); MessageBox.Show("Settings saved!", "Mega Download Enhancer", MessageBoxButtons.OK, MessageBoxIcon.Information); };
-            _btnCancel.Click += (s, e) => { DialogResult = DialogResult.Cancel; Close(); };
-
-            Controls.Add(_tabControl);
-            Controls.Add(_btnOk);
-            Controls.Add(_btnApply);
-            Controls.Add(_btnCancel);
-        }
-
-        private Button CreateButton(string text, DialogResult result)
-        {
-            return new Button
+            // ── Sidebar ─────────────────────────────────────────
+            _sidebar = new Panel
             {
-                Text = text,
-                Size = new Size(80, 32),
-                DialogResult = result,
-                BackColor = Color.FromArgb(0, 120, 215),
-                ForeColor = Color.White,
-                FlatStyle = FlatStyle.Flat,
-                Cursor = Cursors.Hand,
-                Font = new Font("Segoe UI", 9F, FontStyle.Bold)
+                Dock = DockStyle.Left,
+                Width = 130,
+                BackColor = C_SURFACE,
+                Padding = new Padding(0, 8, 0, 0)
             };
+            _sidebar.Paint += (s, e) =>
+            {
+                using var sep = new Pen(C_BORDER, 1f);
+                e.Graphics.DrawLine(sep, _sidebar.Width - 1, 0, _sidebar.Width - 1, _sidebar.Height);
+            };
+
+            // Sidebar nav buttons
+            var sections = new[] { "VPN", "General", "Appearance" };
+            int navY = 12;
+            foreach (var sec in sections)
+            {
+                var s = sec;
+                var navBtn = new Label
+                {
+                    Text = s,
+                    Location = new Point(0, navY),
+                    Size = new Size(130, 36),
+                    TextAlign = ContentAlignment.MiddleLeft,
+                    Padding = new Padding(20, 0, 0, 0),
+                    Cursor = Cursors.Hand,
+                    Font = new Font("Segoe UI", 9F),
+                    ForeColor = C_TEXT2,
+                    BackColor = Color.Transparent,
+                    Tag = s
+                };
+                navBtn.Click += (_, _) => SwitchSection(s);
+                navBtn.MouseEnter += (_, _) => { if ((string)navBtn.Tag! != _currentSection) navBtn.ForeColor = C_TEXT1; };
+                navBtn.MouseLeave += (_, _) => { if ((string)navBtn.Tag! != _currentSection) navBtn.ForeColor = C_TEXT2; };
+                navBtn.Paint += (_, pe) =>
+                {
+                    var active = (string)navBtn.Tag! == _currentSection;
+                    if (active)
+                    {
+                        pe.Graphics.FillRectangle(new SolidBrush(Color.FromArgb(20, 0, 207, 168)),
+                            0, 0, navBtn.Width, navBtn.Height);
+                        pe.Graphics.FillRectangle(new SolidBrush(C_ACCENT),
+                            0, 8, 3, navBtn.Height - 16);
+                        navBtn.ForeColor = C_ACCENT;
+                    }
+                    pe.Graphics.DrawString(navBtn.Text, navBtn.Font,
+                        new SolidBrush(navBtn.ForeColor), new RectangleF(20, 0, navBtn.Width - 20, navBtn.Height),
+                        new StringFormat { LineAlignment = StringAlignment.Center });
+                };
+                _sidebar.Controls.Add(navBtn);
+                navY += 38;
+            }
+
+            // ── Content area ────────────────────────────────────
+            _contentArea = new Panel
+            {
+                Dock = DockStyle.Fill,
+                BackColor = C_BG,
+                Padding = new Padding(24, 16, 24, 16)
+            };
+
+            // ── Footer buttons ───────────────────────────────────
+            var footer = new Panel
+            {
+                Dock = DockStyle.Bottom,
+                Height = 56,
+                BackColor = C_SURFACE
+            };
+            footer.Paint += (s, e) =>
+            {
+                using var sep = new Pen(C_BORDER, 1f);
+                e.Graphics.DrawLine(sep, 0, 0, footer.Width, 0);
+            };
+
+            var btnOk = MakeBtn("Save", C_ACCENT, Color.FromArgb(7, 11, 18));
+            var btnCancel = MakeBtn("Cancel", C_SURF2, C_TEXT1);
+            btnOk.Size = new Size(88, 34);
+            btnCancel.Size = new Size(88, 34);
+            btnOk.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
+            btnCancel.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
+            btnOk.Location = new Point(560 - 24 - 88, 12);
+            btnCancel.Location = new Point(560 - 24 - 88 - 96, 12);
+
+            btnOk.Click += (s, e) => { SaveSettings(); DialogResult = DialogResult.OK; Close(); };
+            btnCancel.Click += (s, e) => { DialogResult = DialogResult.Cancel; Close(); };
+
+            footer.Controls.Add(btnOk);
+            footer.Controls.Add(btnCancel);
+
+            // ── Build section panels ─────────────────────────────
+            _activeSection = BuildVpnSection();
+            _contentArea.Controls.Add(_activeSection);
+
+            Controls.Add(_contentArea);
+            Controls.Add(_sidebar);
+            Controls.Add(footer);
+            Controls.Add(header);
         }
 
-        private void BuildVpnTab()
+        private void SwitchSection(string section)
         {
-            var y = 16;
-            var lw = 150;
-            var cw = 260;
+            _currentSection = section;
+            _contentArea.Controls.Clear();
 
-            _lblVpnName = Label("VPN Connection:", 16, y);
+            _activeSection = section switch
+            {
+                "VPN"        => BuildVpnSection(),
+                "General"    => BuildGeneralSection(),
+                "Appearance" => BuildAppearanceSection(),
+                _            => BuildVpnSection()
+            };
+
+            _contentArea.Controls.Add(_activeSection);
+            _sidebar.Invalidate(true);
+            LoadSettings();
+        }
+
+        // ── Section builders ─────────────────────────────────────
+
+        private Panel BuildVpnSection()
+        {
+            var p = SectionPanel();
+            int y = 0;
+
+            SectionTitle(p, "VPN Connection", ref y);
+
+            var row1 = FieldRow(p, "Connection", ref y);
             _cmbVpnName = new ComboBox
             {
-                Location = new Point(lw, y - 2),
-                Size = new Size(cw - 34, 26),
+                Location = new Point(0, 0),
+                Width = 220,
                 DropDownStyle = ComboBoxStyle.DropDown,
-                Anchor = AnchorStyles.Left | AnchorStyles.Top | AnchorStyles.Right
+                BackColor = C_INPUT,
+                ForeColor = C_TEXT1,
+                FlatStyle = FlatStyle.Flat,
+                Font = new Font("Segoe UI", 9F)
             };
-            _btnRefreshVpns = new Button { Text = "↻", Location = new Point(lw + cw - 30, y - 2), Size = new Size(30, 26) };
+            StyleCombo(_cmbVpnName);
+            _btnRefreshVpns = MakeBtn("↻", C_SURF2, C_TEXT1);
+            _btnRefreshVpns.Size = new Size(32, 26);
+            _btnRefreshVpns.Location = new Point(226, 0);
+            _btnRefreshVpns.Font = new Font("Segoe UI", 10F, FontStyle.Bold);
             _btnRefreshVpns.Click += (s, e) => { var sel = _cmbVpnName.Text; RefreshVpnList(); _cmbVpnName.Text = sel; };
+            row1.Controls.Add(_cmbVpnName);
+            row1.Controls.Add(_btnRefreshVpns);
 
-            y += 40;
-            _chkUseSavedCredentials = new CheckBox { Text = "Use saved Windows credentials", Location = new Point(16, y), Size = new Size(460, 24), Checked = true };
-            _chkUseSavedCredentials.CheckedChanged += (s, e) =>
+            SectionDivider(p, ref y);
+            SectionTitle(p, "Cycle Settings", ref y);
+
+            var row2 = FieldRow(p, "Cycle duration (min)", ref y);
+            _numCycleDuration = MakeNumeric(1, 1440, 10, row2);
+
+            var row3 = FieldRow(p, "Max retries", ref y);
+            _numMaxRetries = MakeNumeric(1, 10, 3, row3);
+
+            SectionDivider(p, ref y);
+            SectionTitle(p, "Credentials", ref y);
+
+            _chkUseSavedCreds = DarkCheck(p, "Use saved Windows credentials", ref y);
+            _chkUseSavedCreds.CheckedChanged += (s, e) =>
             {
-                var useSaved = _chkUseSavedCredentials.Checked;
-                _txtUsername.Enabled = !useSaved;
-                _txtPassword.Enabled = !useSaved;
-                if (useSaved) { _txtUsername.Text = ""; _txtPassword.Text = ""; }
+                bool saved = _chkUseSavedCreds.Checked;
+                _txtUsername.Enabled = !saved;
+                _txtPassword.Enabled = !saved;
             };
 
-            y += 32;
-            _lblUsername = Label("Username:", 32, y);
-            _txtUsername = TextBox("user@domain.com", lw, y);
+            var row4 = FieldRow(p, "Username", ref y);
+            _txtUsername = DarkTextBox(row4, "user@domain.com");
 
-            y += 34;
-            _lblPassword = Label("Password:", 32, y);
-            _txtPassword = TextBox("Leave empty to use saved credentials", lw, y);
+            var row5 = FieldRow(p, "Password", ref y);
+            _txtPassword = DarkTextBox(row5, "leave empty for saved creds");
             _txtPassword.PasswordChar = '●';
 
-            y += 34;
-            _lblCycleDuration = Label("Cycle Duration (min):", 16, y);
-            _numCycleDuration = new NumericUpDown { Location = new Point(lw, y - 2), Size = new Size(80, 26), Minimum = 1, Maximum = 1440, Value = 10 };
+            var hint = new Label
+            {
+                Text = "Tip: Save credentials in Windows VPN settings — more secure than storing here.",
+                Location = new Point(0, y + 4),
+                Size = new Size(380, 32),
+                Font = new Font("Segoe UI", 7.5F),
+                ForeColor = C_TEXT2,
+                BackColor = Color.Transparent
+            };
+            p.Controls.Add(hint);
 
-            y += 34;
-            _lblMaxRetries = Label("Max Retries:", 16, y);
-            _numMaxRetries = new NumericUpDown { Location = new Point(lw, y - 2), Size = new Size(80, 26), Minimum = 1, Maximum = 10, Value = 3 };
-
-            var info = Label("💡 Leave credentials empty to use Windows saved VPN credentials.", 16, y + 40);
-            info.ForeColor = Color.FromArgb(0, 120, 215);
-            info.Font = new Font("Segoe UI", 8F);
-            info.AutoSize = true;
-
-            _tabVpn.Controls.AddRange(new Control[] { _lblVpnName, _cmbVpnName, _btnRefreshVpns, _chkUseSavedCredentials,
-                _lblUsername, _txtUsername, _lblPassword, _txtPassword, _lblCycleDuration, _numCycleDuration, _lblMaxRetries, _numMaxRetries, info });
+            return p;
         }
 
-        private void BuildGeneralTab()
+        private Panel BuildGeneralSection()
         {
-            var y = 16;
-            var lw = 200;
+            var p = SectionPanel();
+            int y = 0;
 
-            _chkMinimizeToTray = new CheckBox { Text = "Minimize to system tray", Location = new Point(16, y), Size = new Size(480, 24) };
-            y += 32;
-            _chkStartMinimized = new CheckBox { Text = "Start minimized", Location = new Point(16, y), Size = new Size(480, 24) };
-            y += 32;
-            _chkAutoStart = new CheckBox { Text = "Auto-start with Windows", Location = new Point(16, y), Size = new Size(480, 24) };
+            SectionTitle(p, "Window Behavior", ref y);
+            _chkMinimize      = DarkCheck(p, "Minimize to system tray on close", ref y);
+            _chkStartMinimized = DarkCheck(p, "Start minimized",                  ref y);
+            _chkAutoStart     = DarkCheck(p, "Auto-start with Windows",            ref y);
 
-            y += 40;
-            _lblRefreshInterval = Label("Status Refresh Interval (s):", 16, y);
-            _numRefreshInterval = new NumericUpDown { Location = new Point(lw, y - 2), Size = new Size(80, 26), Minimum = 0.5m, Maximum = 60, Increment = 0.5m, DecimalPlaces = 1, Value = 1 };
+            SectionDivider(p, ref y);
+            SectionTitle(p, "Status Polling", ref y);
 
-            y += 36;
-            _chkProcessMonitoringEnabled = new CheckBox { Text = "Enable process monitoring", Location = new Point(16, y), Size = new Size(480, 24), Checked = true };
+            var rowRefresh = FieldRow(p, "Refresh interval (sec)", ref y);
+            _numRefresh = MakeNumeric(1, 60, 1, rowRefresh);
 
-            y += 34;
-            _lblProcessName = Label("Process Name:", 32, y);
-            _txtProcessName = TextBox("MEGAsync", lw, y);
+            SectionDivider(p, ref y);
+            SectionTitle(p, "Process Monitoring", ref y);
+            _chkMonitoring = DarkCheck(p, "Enable process monitoring", ref y);
 
-            y += 34;
-            _lblProcessDisplayName = Label("Display Name:", 32, y);
-            _txtProcessDisplayName = TextBox("MEGAsync", lw, y);
+            var rowProc = FieldRow(p, "Process name", ref y);
+            _txtProcessName = DarkTextBox(rowProc, "MEGAsync");
 
-            _tabGeneral.Controls.AddRange(new Control[] { _chkMinimizeToTray, _chkStartMinimized, _chkAutoStart,
-                _lblRefreshInterval, _numRefreshInterval, _chkProcessMonitoringEnabled,
-                _lblProcessName, _txtProcessName, _lblProcessDisplayName, _txtProcessDisplayName });
+            var rowDisp = FieldRow(p, "Display name", ref y);
+            _txtProcessDisplay = DarkTextBox(rowDisp, "MEGAsync");
+
+            return p;
         }
 
-        private void BuildAppearanceTab()
+        private Panel BuildAppearanceSection()
         {
-            var y = 16;
-            _lblTheme = Label("Theme:", 16, y);
+            var p = SectionPanel();
+            int y = 0;
+
+            SectionTitle(p, "Theme", ref y);
+
+            var row = FieldRow(p, "Color scheme", ref y);
             _cmbTheme = new ComboBox
             {
-                Location = new Point(120, y - 2),
-                Size = new Size(220, 26),
-                DropDownStyle = ComboBoxStyle.DropDownList
+                Location = new Point(0, 0),
+                Width = 220,
+                DropDownStyle = ComboBoxStyle.DropDownList,
+                BackColor = C_INPUT,
+                ForeColor = C_TEXT1,
+                FlatStyle = FlatStyle.Flat
             };
-            _cmbTheme.Items.AddRange(new[] { "System (follows Windows)", "Light", "Dark" });
+            _cmbTheme.Items.AddRange(new[] { "System (Windows default)", "Light", "Dark" });
+            StyleCombo(_cmbTheme);
+            row.Controls.Add(_cmbTheme);
 
-            var info = Label("🎨 Theme changes apply after OK or Apply.", 16, y + 50);
-            info.ForeColor = Color.FromArgb(100, 116, 139);
-            info.Font = new Font("Segoe UI", 8F);
-            info.AutoSize = true;
+            var note = new Label
+            {
+                Text = "Theme changes apply after restarting the app.",
+                Location = new Point(0, y + 4),
+                AutoSize = true,
+                Font = new Font("Segoe UI", 8F),
+                ForeColor = C_TEXT2,
+                BackColor = Color.Transparent
+            };
+            p.Controls.Add(note);
 
-            _tabAppearance.Controls.Add(_lblTheme);
-            _tabAppearance.Controls.Add(_cmbTheme);
-            _tabAppearance.Controls.Add(info);
+            return p;
         }
 
-        private void BuildAboutTab()
-        {
-            var title = new Label
-            {
-                Text = "Mega Download Enhancer",
-                Font = new Font("Segoe UI", 14F, FontStyle.Bold),
-                AutoSize = true,
-                Location = new Point(20, 20),
-                ForeColor = Color.FromArgb(15, 23, 42)
-            };
-
-            var version = new Label
-            {
-                Text = $"Version {Application.ProductVersion}",
-                AutoSize = true,
-                Location = new Point(20, 50),
-                ForeColor = Color.FromArgb(100, 116, 139)
-            };
-
-            var desc = new Label
-            {
-                Text = "VPN Auto-Cycler for seamless MEGA.nz downloads.\nAutomatically rotates Cloudflare WARP to bypass\nfree-tier daily transfer limits.",
-                AutoSize = true,
-                Location = new Point(20, 80),
-                ForeColor = Color.FromArgb(63, 63, 70),
-                MaximumSize = new Size(480, 0)
-            };
-
-            var copyright = new Label
-            {
-                Text = "© 2026 Imran Rahman. All rights reserved.",
-                AutoSize = true,
-                Location = new Point(20, 140),
-                Font = new Font("Segoe UI", 8F),
-                ForeColor = Color.FromArgb(161, 161, 170)
-            };
-
-            var repo = new LinkLabel
-            {
-                Text = "View on GitHub",
-                AutoSize = true,
-                Location = new Point(20, 165),
-                Font = new Font("Segoe UI", 8F),
-                LinkColor = Color.FromArgb(0, 120, 215)
-            };
-            repo.Click += (s, e) => System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
-            {
-                FileName = "https://github.com/IMRAN104/MegaDownloadEnhancer",
-                UseShellExecute = true
-            });
-
-            _tabAbout.Controls.Add(title);
-            _tabAbout.Controls.Add(version);
-            _tabAbout.Controls.Add(desc);
-            _tabAbout.Controls.Add(copyright);
-            _tabAbout.Controls.Add(repo);
-        }
-
-        private static Label Label(string text, int x, int y) => new Label { Text = text, Location = new Point(x, y), AutoSize = true };
-        private static TextBox TextBox(string placeholder, int x, int y) => new TextBox
-        {
-            Location = new Point(x, y - 2),
-            Size = new Size(260, 26),
-            PlaceholderText = placeholder,
-            Anchor = AnchorStyles.Left | AnchorStyles.Top | AnchorStyles.Right
-        };
+        // ── Load / Save ──────────────────────────────────────────
 
         private void LoadSettings()
         {
-            RefreshVpnList();
-            _cmbVpnName.Text = _settings.VpnName;
-            _txtUsername.Text = _settings.Username;
-            _txtPassword.Text = _settings.Password;
-            _numCycleDuration.Value = _settings.CycleDurationMinutes;
-            _numMaxRetries.Value = _settings.MaxRetries;
-            _chkUseSavedCredentials.Checked = string.IsNullOrEmpty(_settings.Username) && string.IsNullOrEmpty(_settings.Password);
-            _chkMinimizeToTray.Checked = _settings.MinimizeToTray;
-            _chkStartMinimized.Checked = _settings.StartMinimized;
-            _chkAutoStart.Checked = _settings.AutoStart;
-            _numRefreshInterval.Value = _settings.StatusRefreshIntervalSeconds;
-            _chkProcessMonitoringEnabled.Checked = _settings.ProcessMonitoringEnabled;
-            _txtProcessName.Text = _settings.MonitoredProcessName;
-            _txtProcessDisplayName.Text = _settings.MonitoredProcessDisplayName;
-            _cmbTheme.SelectedIndex = (int)_settings.ThemeMode;
+            if (_cmbVpnName != null)
+            {
+                RefreshVpnList();
+                _cmbVpnName.Text = _settings.VpnName;
+            }
+            if (_numCycleDuration != null) _numCycleDuration.Value = _settings.CycleDurationMinutes;
+            if (_numMaxRetries != null)    _numMaxRetries.Value    = _settings.MaxRetries;
+            if (_chkUseSavedCreds != null)
+            {
+                _chkUseSavedCreds.Checked = string.IsNullOrEmpty(_settings.Username);
+                _txtUsername.Text = _settings.Username;
+                _txtPassword.Text = _settings.Password;
+                _txtUsername.Enabled = !_chkUseSavedCreds.Checked;
+                _txtPassword.Enabled = !_chkUseSavedCreds.Checked;
+            }
+            if (_chkMinimize != null)       _chkMinimize.Checked       = _settings.MinimizeToTray;
+            if (_chkStartMinimized != null) _chkStartMinimized.Checked = _settings.StartMinimized;
+            if (_chkAutoStart != null)      _chkAutoStart.Checked      = _settings.AutoStart;
+            if (_numRefresh != null)        _numRefresh.Value           = _settings.StatusRefreshIntervalSeconds;
+            if (_chkMonitoring != null)     _chkMonitoring.Checked     = _settings.ProcessMonitoringEnabled;
+            if (_txtProcessName != null)    _txtProcessName.Text        = _settings.MonitoredProcessName;
+            if (_txtProcessDisplay != null) _txtProcessDisplay.Text     = _settings.MonitoredProcessDisplayName;
+            if (_cmbTheme != null)          _cmbTheme.SelectedIndex     = (int)_settings.ThemeMode;
+        }
+
+        private void SaveSettings()
+        {
+            if (_cmbVpnName != null)       _settings.VpnName = _cmbVpnName.Text;
+            if (_numCycleDuration != null) _settings.CycleDurationMinutes = (int)_numCycleDuration.Value;
+            if (_numMaxRetries != null)    _settings.MaxRetries = (int)_numMaxRetries.Value;
+            if (_chkUseSavedCreds != null)
+            {
+                _settings.Username = _chkUseSavedCreds.Checked ? "" : _txtUsername.Text;
+                _settings.Password = _chkUseSavedCreds.Checked ? "" : _txtPassword.Text;
+            }
+            if (_chkMinimize != null)       _settings.MinimizeToTray    = _chkMinimize.Checked;
+            if (_chkStartMinimized != null) _settings.StartMinimized    = _chkStartMinimized.Checked;
+            if (_chkAutoStart != null)      _settings.AutoStart         = _chkAutoStart.Checked;
+            if (_numRefresh != null)        _settings.StatusRefreshIntervalSeconds = (int)_numRefresh.Value;
+            if (_chkMonitoring != null)     _settings.ProcessMonitoringEnabled     = _chkMonitoring.Checked;
+            if (_txtProcessName != null)    _settings.MonitoredProcessName         = _txtProcessName.Text.Trim();
+            if (_txtProcessDisplay != null) _settings.MonitoredProcessDisplayName  = _txtProcessDisplay.Text.Trim();
+            if (_cmbTheme != null)          _settings.ThemeMode = (ThemeMode)_cmbTheme.SelectedIndex;
         }
 
         private void RefreshVpnList()
         {
+            if (_cmbVpnName == null) return;
             try
             {
                 _cmbVpnName.Items.Clear();
                 _cmbVpnName.Items.Add("CloudflareWARP");
                 foreach (var vpn in _vpnService.GetAvailableVpns())
                     if (!_cmbVpnName.Items.Contains(vpn)) _cmbVpnName.Items.Add(vpn);
-                _cmbVpnName.Items.Add("(Manual Entry)");
-                if (_cmbVpnName.Items.Count == 0) _cmbVpnName.Items.Add("No VPN connections found");
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Failed to retrieve VPN list: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show($"Failed to load VPN list: {ex.Message}", "Error",
+                    MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
-        private void SaveSettings()
+        // ── UI Helpers ───────────────────────────────────────────
+
+        static Panel SectionPanel()
         {
-            _settings.VpnName = _cmbVpnName.Text;
-            if (_chkUseSavedCredentials.Checked) { _settings.Username = ""; _settings.Password = ""; }
-            else { _settings.Username = _txtUsername.Text; _settings.Password = _txtPassword.Text; }
-            _settings.CycleDurationMinutes = (int)_numCycleDuration.Value;
-            _settings.MaxRetries = (int)_numMaxRetries.Value;
-            _settings.MinimizeToTray = _chkMinimizeToTray.Checked;
-            _settings.StartMinimized = _chkStartMinimized.Checked;
-            _settings.AutoStart = _chkAutoStart.Checked;
-            _settings.StatusRefreshIntervalSeconds = (int)Math.Round(_numRefreshInterval.Value, MidpointRounding.AwayFromZero);
-            _settings.ProcessMonitoringEnabled = _chkProcessMonitoringEnabled.Checked;
-            _settings.MonitoredProcessName = _txtProcessName.Text.Trim();
-            _settings.MonitoredProcessDisplayName = _txtProcessDisplayName.Text.Trim();
-            _settings.ThemeMode = (ThemeMode)_cmbTheme.SelectedIndex;
+            var p = new Panel { Dock = DockStyle.Fill, BackColor = Color.Transparent, Padding = new Padding(4) };
+            return p;
+        }
+
+        static void SectionTitle(Panel parent, string title, ref int y)
+        {
+            var lbl = new Label
+            {
+                Text = title.ToUpper(),
+                Location = new Point(0, y),
+                AutoSize = true,
+                Font = new Font("Segoe UI", 7.5F, FontStyle.Bold),
+                ForeColor = Color.FromArgb(0, 207, 168),
+                BackColor = Color.Transparent
+            };
+            parent.Controls.Add(lbl);
+            y += 24;
+        }
+
+        static void SectionDivider(Panel parent, ref int y)
+        {
+            var div = new Panel
+            {
+                Location = new Point(0, y + 4),
+                Size = new Size(400, 1),
+                BackColor = Color.FromArgb(28, 40, 68)
+            };
+            parent.Controls.Add(div);
+            y += 18;
+        }
+
+        static Panel FieldRow(Panel parent, string labelText, ref int y)
+        {
+            var lbl = new Label
+            {
+                Text = labelText,
+                Location = new Point(0, y + 4),
+                Size = new Size(160, 22),
+                Font = new Font("Segoe UI", 8.5F),
+                ForeColor = Color.FromArgb(160, 180, 210),
+                BackColor = Color.Transparent
+            };
+            var row = new Panel
+            {
+                Location = new Point(162, y),
+                Size = new Size(300, 28),
+                BackColor = Color.Transparent
+            };
+            parent.Controls.Add(lbl);
+            parent.Controls.Add(row);
+            y += 36;
+            return row;
+        }
+
+        static CheckBox DarkCheck(Panel parent, string text, ref int y)
+        {
+            var chk = new CheckBox
+            {
+                Text = text,
+                Location = new Point(0, y),
+                AutoSize = true,
+                Font = new Font("Segoe UI", 9F),
+                ForeColor = Color.FromArgb(160, 180, 210),
+                BackColor = Color.Transparent
+            };
+            parent.Controls.Add(chk);
+            y += 28;
+            return chk;
+        }
+
+        static TextBox DarkTextBox(Panel parent, string placeholder)
+        {
+            var tb = new TextBox
+            {
+                Location = new Point(0, 0),
+                Width = 230,
+                BackColor = Color.FromArgb(16, 24, 38),
+                ForeColor = Color.FromArgb(226, 235, 248),
+                BorderStyle = BorderStyle.FixedSingle,
+                Font = new Font("Segoe UI", 9F),
+                PlaceholderText = placeholder
+            };
+            parent.Controls.Add(tb);
+            return tb;
+        }
+
+        static NumericUpDown MakeNumeric(int min, int max, int val, Panel parent)
+        {
+            var n = new NumericUpDown
+            {
+                Location = new Point(0, 0),
+                Size = new Size(80, 26),
+                Minimum = min,
+                Maximum = max,
+                Value = val,
+                BackColor = Color.FromArgb(16, 24, 38),
+                ForeColor = Color.FromArgb(226, 235, 248),
+                BorderStyle = BorderStyle.FixedSingle,
+                Font = new Font("Segoe UI", 9F)
+            };
+            parent.Controls.Add(n);
+            return n;
+        }
+
+        static void StyleCombo(ComboBox cb)
+        {
+            cb.FlatStyle = FlatStyle.Flat;
+            cb.BackColor = Color.FromArgb(16, 24, 38);
+            cb.ForeColor = Color.FromArgb(226, 235, 248);
+        }
+
+        static Button MakeBtn(string text, Color bg, Color fg)
+        {
+            var b = new Button
+            {
+                Text = text,
+                BackColor = bg,
+                ForeColor = fg,
+                FlatStyle = FlatStyle.Flat,
+                Font = new Font("Segoe UI", 9F, FontStyle.Bold),
+                Cursor = Cursors.Hand,
+                UseVisualStyleBackColor = false
+            };
+            b.FlatAppearance.BorderSize = 0;
+            b.FlatAppearance.MouseOverBackColor =
+                Color.FromArgb(bg.A, Math.Min(255, bg.R + 20), Math.Min(255, bg.G + 20), Math.Min(255, bg.B + 20));
+            return b;
         }
     }
 }
