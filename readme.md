@@ -1,239 +1,181 @@
-# VPN Auto-Toggle Script
+# Mega Download Enhancer
 
 [![Build Status](https://github.com/IMRAN104/MegaDownloadEnhancer/actions/workflows/build-test.yml/badge.svg)](https://github.com/IMRAN104/MegaDownloadEnhancer/actions/workflows/build-test.yml)
 [![Latest Release](https://img.shields.io/github/v/release/IMRAN104/MegaDownloadEnhancer)](https://github.com/IMRAN104/MegaDownloadEnhancer/releases/latest)
 [![Downloads](https://img.shields.io/github/downloads/IMRAN104/MegaDownloadEnhancer/total)](https://github.com/IMRAN104/MegaDownloadEnhancer/releases)
+[![Platform](https://img.shields.io/badge/platform-Windows%2010%2F11-blue)](https://github.com/IMRAN104/MegaDownloadEnhancer/releases/latest)
 
-Automated VPN connection toggler that cycles your VPN on and off at regular intervals. Perfect for scenarios requiring periodic IP rotation or VPN connection management.
-
-## 📥 Download
-
-**Latest Release:** [VPN Manager v1.2.0](https://github.com/IMRAN104/MegaDownloadEnhancer/releases/latest)
-
-Download the Windows application with GUI or use the PowerShell script directly:
-
-- **Windows App (Recommended):** Download `VPNManager-v1.2.0-win-x64.zip` from [Releases](https://github.com/IMRAN104/MegaDownloadEnhancer/releases/latest)
-- **PowerShell Script:** Use `VPN-AutoToggle.ps1` from this repository
-
-### Quick Install
-1. [Download latest release](https://github.com/IMRAN104/MegaDownloadEnhancer/releases/latest)
-2. Extract to folder (e.g., `C:\Program Files\VPNManager`)
-3. Run `VPNManager.exe`
-4. Configure settings and click "Start Cycle"
-
-## 🎯 Features
-
-- ✅ **Automatic VPN Cycling**: Toggle VPN on/off every N minutes (default: 10)
-- ✅ **Robust Error Handling**: Automatic retry logic for failed connections
-- ✅ **Comprehensive Logging**: Track all VPN state changes and errors
-- ✅ **Graceful Shutdown**: Ctrl+C for clean exit
-- ✅ **Real-time Status**: Live countdown and state display
-- ✅ **Flexible Configuration**: Customizable timing, credentials, and retry settings
-- ✅ **Windows Native**: Uses built-in Windows VPN management (rasdial)
-
-## 📋 Requirements
-
-- **OS**: Windows 10/11 or Windows Server 2016+
-- **PowerShell**: Version 5.1 or higher (for PowerShell script)
-- **VPN**: Cloudflare WARP or Windows VPN connection
-- **Permissions**: Administrator privileges recommended
-
-## ⚙️ Configuration
-
-**VPNManager GUI (Recommended):**
-- Settings managed through Settings UI
-- Configuration stored in `%AppData%\VPNManager\settings.json`
-- Persistent across application restarts
-
-**PowerShell Script:**
-- Configure via command-line parameters (no configuration file needed)
-- Auto-detects MEGAsync installation path
-- See examples below for usage
-
-## 🚀 Quick Start
-
-### 1. Setup Your VPN
-```powershell
-# List your VPN connections
-Get-VpnConnection
-```
-
-### 2. Run the Test Script
-```powershell
-# Verify your system is ready
-.\Test-VpnSetup.ps1 -VpnName "YourVPNName"
-```
-
-### 3. Start Auto-Toggle
-```powershell
-# Basic usage with Cloudflare WARP (default)
-.\VPN-AutoToggle.ps1
-
-# With custom VPN and 5-minute cycles
-.\VPN-AutoToggle.ps1 -VpnName "MyVPN" -CycleDurationMinutes 5
-
-# Quick test (1-minute cycles)
-.\VPN-AutoToggle.ps1 -VpnName "CloudflareWARP" -CycleDurationMinutes 1
-```
-
-## 📖 Documentation
-
-- **[QUICK-START.md](QUICK-START.md)** - Get started in 3 steps
-- **[SETUP-AND-USAGE.md](SETUP-AND-USAGE.md)** - Complete setup guide and troubleshooting
-- **[SECURITY.md](SECURITY.md)** - Security policy and best practices
-
-## 💡 Usage Examples
-
-### Basic Usage
-```powershell
-# Use Cloudflare WARP (default)
-.\VPN-AutoToggle.ps1
-
-# Use specific VPN
-.\VPN-AutoToggle.ps1 -VpnName "MyVPN"
-```
-
-### Custom Timing
-```powershell
-# 5-minute cycles
-.\VPN-AutoToggle.ps1 -VpnName "MyVPN" -CycleDurationMinutes 5
-```
-
-### All Options
-```powershell
-.\VPN-AutoToggle.ps1 `
-    -VpnName "MyVPN" `
-    -Username "user@domain.com" `
-    -Password "SecurePass" `
-    -CycleDurationMinutes 10 `
-    -LogPath "C:\Logs\vpn.log" `
-    -MaxRetries 3
-```
-
-## 📁 Project Files
-
-| File | Description |
-|------|-------------|
-| `VPNManager.exe` | Windows GUI application (from releases) |
-| `VPN-AutoToggle.ps1` | Main automation script |
-| `Test-VpnSetup.ps1` | System validation and testing tool |
-| `QUICK-START.md` | Quick reference guide |
-| `SETUP-AND-USAGE.md` | Detailed documentation |
-| `CI_CD_GUIDE.md` | Automated CI/CD process guide |
-| `readme.md` | This file |
-
-## 🔧 Parameters
-
-| Parameter | Required | Default | Description |
-|-----------|----------|---------|-------------|
-| `VpnName` | ❌ No | `CloudflareWARP` | Name of VPN connection |
-| `UseWarp` | ❌ No | Auto-detect | Use WARP (auto-enabled for CloudflareWARP) |
-| `CycleDurationMinutes` | ❌ No | 10 | Minutes for each state |
-| `MegasyncPath` | ❌ No | Auto-detect | Path to MEGAsync.exe |
-| `LogPath` | ❌ No | `.\VPN-AutoToggle.log` | Log file location |
-| `MaxRetries` | ❌ No | 3 | Connection retry attempts |
-
-## 🛑 Stopping the Script
-
-Press `Ctrl+C` at any time for graceful shutdown. The script will:
-- Complete the current operation safely
-- Log the shutdown event
-- Exit cleanly
-
-## 🧪 Testing
-
-Run the included test script to verify your setup:
-
-```powershell
-.\Test-VpnSetup.ps1 -VpnName "YourVPNName"
-```
-
-This checks:
-- PowerShell version
-- Administrator privileges
-- Execution policy
-- VPN module availability
-- VPN connection existence
-- rasdial command
-- Script files
-
-## 📊 Sample Output
-
-```
-========================================
-   VPN Auto-Toggle Script v1.0
-========================================
-
-[2024-01-15 10:30:00] [Info] Script started with parameters:
-[2024-01-15 10:30:00] [Info]   VPN Name: MyVPN
-[2024-01-15 10:30:00] [Info]   Cycle Duration: 10 minutes
-[2024-01-15 10:30:01] [Info] Attempting to connect to VPN 'MyVPN' (Attempt 1 of 3)...
-[2024-01-15 10:30:05] [Success] VPN connected successfully!
-[2024-01-15 10:30:05] [Info] Waiting for 10 minutes before next action: Disconnect VPN
-[10:30:15] Current State: Connected | Next Action: Disconnect VPN in 9m 50s
-```
-
-## 🔒 Security Best Practices
-
-1. ✅ **Save credentials** in Windows VPN settings instead of passing as parameters
-2. ✅ **Protect log files** - they may contain sensitive information
-3. ✅ **Secure the script** - store in a protected directory
-4. ⚠️ **Understand impact** - toggling VPN affects your network security
-
-## ❓ Troubleshooting
-
-| Issue | Solution |
-|-------|----------|
-| VPN not found | Run `Get-VpnConnection` to find exact name |
-| Execution policy error | Run `Set-ExecutionPolicy RemoteSigned -Scope CurrentUser` |
-| Access denied | Run PowerShell as Administrator |
-| Connection fails | Test manually: `rasdial "YourVPNName"` |
-
-See [SETUP-AND-USAGE.md](SETUP-AND-USAGE.md) for detailed troubleshooting.
-
-## 🎯 Use Cases
-
-- **IP Rotation**: Periodically change your IP address
-- **Connection Management**: Avoid VPN timeout/disconnection issues
-- **Bandwidth Management**: Cycle VPN to manage data usage
-- **Testing**: Automated testing of VPN-dependent applications
-- **Privacy**: Regular IP changes for enhanced privacy
-
-## 📝 License
-
-This project is provided as-is for personal and educational use.
-
-## 🤝 Contributing
-
-Contributions, issues, and feature requests are welcome!
-
-## ⚠️ Disclaimer
-
-This script is provided for legitimate use cases only. Users are responsible for:
-- Complying with their VPN provider's terms of service
-- Understanding the security implications of toggling VPN
-- Ensuring proper authorization for automated VPN management
-
-## 🚀 CI/CD
-
-This project uses **GitHub Actions** for automated building, testing, and releases:
-
-- **Automated Builds:** Every push is built and tested
-- **Automated Releases:** Push a version tag to create a release
-- **Quality Checks:** Tests run on every PR
-
-See [CI_CD_GUIDE.md](CI_CD_GUIDE.md) for details on the automated release process.
-
-### For Developers
-
-Create a new release:
-```bash
-git tag v1.3.0
-git push origin v1.3.0
-```
-
-That's it! GitHub Actions will build, package, and publish the release automatically.
+> **Download from MEGA at full speed — forever. No premium required.**
 
 ---
 
-**Made with ❤️ for automated VPN management**
+## The Problem
+
+MEGA throttles free users. Hit the daily bandwidth limit and you're staring at this:
+
+```
+Transfer quota exceeded. Your download will resume in 6 hours.
+```
+
+Six hours. For a file you need *now*.
+
+## The Solution
+
+**Mega Download Enhancer** automatically cycles your IP address using Cloudflare WARP (free) on a timer, then restarts MEGAsync so it picks up the fresh IP. MEGA sees a new user. Downloads resume instantly.
+
+Set it once. Walk away. It runs silently in your system tray.
+
+---
+
+## 📥 Download — No Installation Required
+
+**[⬇ Download Latest Release](https://github.com/IMRAN104/MegaDownloadEnhancer/releases/latest)**
+
+1. Download `VPNManager-v1.2.0-win-x64.zip`
+2. Extract anywhere
+3. Run `VPNManager.exe`
+4. Done
+
+No .NET install needed. Self-contained, single folder, no registry mess.
+
+---
+
+## How It Works
+
+```
+Every N minutes (default: 6):
+  1. Disconnect WARP  →  MEGA sees your real IP
+  2. Reconnect WARP   →  New IP assigned
+  3. Restart MEGAsync →  Fresh session, quota reset
+  4. Downloads resume at full speed
+```
+
+The cycle runs in the background. You get a system tray icon, balloon notifications on state changes, and a live status window if you want it.
+
+---
+
+## Features
+
+| Feature | Details |
+|---------|---------|
+| **Auto IP cycling** | Cloudflare WARP or any Windows VPN |
+| **MEGAsync companion** | Auto-detects and restarts the sync client |
+| **System tray** | Runs silently, always accessible |
+| **Dark / Light theme** | Follows Windows system preference |
+| **Auto-start with Windows** | Toggle from the tray menu |
+| **Configurable timing** | 1–60 minute cycles, your call |
+| **No account needed** | Works with free Cloudflare WARP |
+
+---
+
+## Requirements
+
+- Windows 10 or 11
+- [Cloudflare WARP](https://1.1.1.1/) (free — this is your IP rotator)
+- MEGAsync desktop client (the thing you want to keep running)
+
+That's it. No VPN subscription. No paid proxy. No browser extension.
+
+---
+
+## Quick Setup (2 minutes)
+
+### Step 1 — Install Cloudflare WARP
+Download from [1.1.1.1](https://1.1.1.1/) and connect once manually to make sure it works.
+
+### Step 2 — Run the app
+Extract the zip, launch `VPNManager.exe`. First-time setup opens automatically.
+
+### Step 3 — Configure
+- Select `CloudflareWARP` from the VPN dropdown
+- Set cycle duration (start with 6 minutes — matches MEGA's quota window)
+- Enable MEGAsync monitoring
+- Click **Start Cycle**
+
+The app minimizes to tray. Downloads continue uninterrupted.
+
+---
+
+## Screenshots
+
+> _GUI with real-time VPN + MEGAsync status, dark/light theme, one-click cycle control._
+
+---
+
+## Advanced: PowerShell Script
+
+Power users can use the included `VPN-AutoToggle.ps1` directly:
+
+```powershell
+# Basic — uses CloudflareWARP, 10-minute cycles
+.\VPN-AutoToggle.ps1
+
+# Custom VPN and timing
+.\VPN-AutoToggle.ps1 -VpnName "MyVPN" -CycleDurationMinutes 6
+
+# All options
+.\VPN-AutoToggle.ps1 `
+    -VpnName "CloudflareWARP" `
+    -CycleDurationMinutes 6 `
+    -LogPath "C:\Logs\mega.log" `
+    -MaxRetries 3
+```
+
+Validate your setup first:
+```powershell
+.\Test-VpnSetup.ps1 -VpnName "CloudflareWARP"
+```
+
+---
+
+## FAQ
+
+**Does this work with the MEGA browser extension?**
+This tool targets MEGAsync (the desktop sync client). For browser downloads, use it alongside any VPN that rotates IP on reconnect.
+
+**Is Cloudflare WARP actually free?**
+Yes. The base WARP service is completely free, assigns you a new IP on each connect, and has no data cap.
+
+**Will MEGA ban my account?**
+This tool bypasses bandwidth throttling, not account restrictions. It does not automate paid-feature access or violate content policies.
+
+**Can I use a different VPN?**
+Yes — any VPN connection visible in Windows VPN settings works. WARP is recommended because it's free and reconnects in under 2 seconds.
+
+**Does it run when I close the window?**
+Yes. Closing the window minimizes to tray. Use *Exit* from the tray menu to fully quit.
+
+---
+
+## Troubleshooting
+
+| Problem | Fix |
+|---------|-----|
+| WARP not found | Run `warp-cli.exe connect` in terminal to verify WARP is installed |
+| MEGAsync not detected | Open MEGAsync first, let it fully load |
+| Cycle starts but downloads don't resume | Increase cycle duration to 8–10 min |
+| VPN toggle fails | Run as Administrator |
+
+---
+
+## Building from Source
+
+```powershell
+dotnet publish VPNManager/VPNManager.csproj -c Release -r win-x64 --self-contained true
+```
+
+Or use GitHub Actions — push a `v*.*.*` tag and it builds and releases automatically.
+
+---
+
+## License
+
+MIT. Use it, fork it, improve it.
+
+## Contributing
+
+Issues and PRs welcome. If this saved you hours of waiting, a ⭐ star costs nothing.
+
+---
+
+**Made for anyone who's ever watched a MEGA countdown timer and thought "there has to be a better way."**
