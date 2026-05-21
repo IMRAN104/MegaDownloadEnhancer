@@ -99,56 +99,23 @@ jobs:
           
           # Create user guide
           Write-Host "Creating user guide..." -ForegroundColor Gray
-          $quickstart = @"
-# VPN Manager - Quick Start Guide
-
-## Installation
-
-1. Extract all files to a folder (e.g., C:\Program Files\VPNManager)
-2. Run VPNManager.exe
-3. Configure your VPN settings in Settings
-4. Click "Start Cycle" to begin
-
-## Requirements
-
-- Windows 10/11
-- Cloudflare WARP (for WARP support)
-- .NET 10.0 Runtime (included in self-contained build)
-
-## First Time Setup
-
-1. Install Cloudflare WARP from: https://1.1.1.1/
-2. Run VPNManager.exe
-3. Open Settings
-4. Select "CloudflareWARP" from VPN dropdown
-5. Set cycle duration (default: 10 minutes)
-6. Click OK
-7. Click "Start Cycle"
-
-## Features
-
-- Automatic VPN cycling every N minutes
-- Real-time status monitoring
-- MEGAsync auto-restart on VPN toggle
-- System tray support
-- Persistent settings
-
-## Troubleshooting
-
-If WARP doesn't connect:
-- Open WARP desktop app and sign in
-- Check firewall settings
-- Run VPNManager as Administrator
-
-For more information, see the included documentation files.
-
-## Version
-
-VPN Manager v$VERSION
-Release Date: $(Get-Date -Format "yyyy-MM-dd")
-Built with GitHub Actions
-"@
-          $quickstart | Out-File -FilePath "$RELEASE_DIR\QUICKSTART.txt" -Encoding UTF8
+          $lines = @(
+            "Mega Download Enhancer - Quick Start",
+            "=====================================",
+            "",
+            "1. Install Cloudflare WARP: https://1.1.1.1/",
+            "2. Run VPNManager.exe",
+            "3. Open Settings -> select CloudflareWARP",
+            "4. Set cycle duration (6 min recommended for MEGA)",
+            "5. Click Start Cycle",
+            "",
+            "The app minimizes to tray and cycles your IP automatically.",
+            "MEGAsync restarts on each toggle so MEGA sees a fresh session.",
+            "",
+            "Version: $VERSION  |  Built: $(Get-Date -Format 'yyyy-MM-dd')",
+            "Docs: https://github.com/${{ github.repository }}"
+          )
+          $lines | Out-File -FilePath "$RELEASE_DIR\QUICKSTART.txt" -Encoding UTF8
           
           # Step 4: Create ZIP archive
           Write-Host "`n[4/6] Creating ZIP archive..." -ForegroundColor Yellow
@@ -187,65 +154,40 @@ Built with GitHub Actions
         run: |
           $VERSION = "${{ steps.version.outputs.VERSION }}"
           $CHECKSUM = Get-Content checksum.txt
-          
-          $notes = @"
-# 🎉 VPN Manager v$VERSION
+          $DATE = Get-Date -Format "yyyy-MM-dd"
+          $REPO = "${{ github.repository }}"
 
-## 📦 Installation
+          $lines = @(
+            "## Mega Download Enhancer v$VERSION",
+            "",
+            "Automatically cycles your VPN/IP to bypass MEGA bandwidth limits and keep MEGAsync downloading at full speed.",
+            "",
+            "### Installation",
+            "1. Download ``VPNManager-v$VERSION-win-x64.zip``",
+            "2. Extract anywhere — no installer needed",
+            "3. Run ``VPNManager.exe``",
+            "4. Select CloudflareWARP, set 6-min cycle, click **Start Cycle**",
+            "",
+            "### Requirements",
+            "- Windows 10 or 11",
+            "- [Cloudflare WARP](https://1.1.1.1/) (free)",
+            "- MEGAsync desktop client",
+            "- No .NET install needed (self-contained build)",
+            "",
+            "### SHA256 Checksum",
+            "``````",
+            "$CHECKSUM",
+            "``````",
+            "",
+            "Verify: ``Get-FileHash VPNManager-v$VERSION-win-x64.zip -Algorithm SHA256``",
+            "",
+            "---",
+            "Built $DATE with GitHub Actions"
+          )
 
-### Quick Start
-1. Download ``VPNManager-v$VERSION-win-x64.zip``
-2. Extract to a folder (e.g., ``C:\Program Files\VPNManager``)
-3. Run ``VPNManager.exe``
-4. Configure your VPN settings
-5. Click "Start Cycle"
-
-### Requirements
-- Windows 10/11
-- Cloudflare WARP (for WARP support)
-- No .NET installation needed (self-contained)
-
-### First-Time Setup
-1. Install Cloudflare WARP from [1.1.1.1](https://1.1.1.1/)
-2. Run VPNManager.exe
-3. Open Settings → Select "CloudflareWARP"
-4. Set cycle duration (default: 10 minutes)
-5. Click OK → Start Cycle
-
-## 📖 Documentation
-
-Included in the package:
-- **QUICKSTART.txt** - Quick start guide
-- **README.md** - Full documentation
-- **VPN-AutoToggle.ps1** - PowerShell script for advanced users
-
-## 🔐 Verification
-
-**SHA256 Checksum:**
-``````
-$CHECKSUM
-``````
-
-Verify with:
-``````powershell
-Get-FileHash VPNManager-v$VERSION-win-x64.zip -Algorithm SHA256
-``````
-
-## 💬 Support
-
-- 📖 Check documentation files
-- 🐛 Report issues: [GitHub Issues](https://github.com/${{ github.repository }}/issues)
-- 💬 Discussions: [GitHub Discussions](https://github.com/${{ github.repository }}/discussions)
-
----
-
-**Built with GitHub Actions** | **Release Date:** $(Get-Date -Format "yyyy-MM-dd")
-"@
-          
-          # Save to file for the release
+          $notes = $lines -join "`n"
           $notes | Out-File -FilePath "RELEASE_NOTES.md" -Encoding UTF8
-          
-          # Set multi-line output
+
           $delimiter = "EOF_DELIMITER_$(Get-Random)"
           echo "NOTES<<$delimiter" >> $env:GITHUB_OUTPUT
           echo "$notes" >> $env:GITHUB_OUTPUT
