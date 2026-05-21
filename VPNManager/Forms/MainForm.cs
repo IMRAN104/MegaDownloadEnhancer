@@ -88,6 +88,18 @@ namespace VPNManager.Forms
                 _cycleCard?.Invalidate();
             };
 
+            // When PS script exits unexpectedly, reset UI to idle state
+            _vpnService.StatusChanged += (s, status) =>
+            {
+                if (status.CurrentState == "Stopped")
+                {
+                    if (InvokeRequired)
+                        BeginInvoke(() => { _cycleStartTime = null; UpdateButtonStates(); SetStatus("Cycle stopped"); });
+                    else
+                        { _cycleStartTime = null; UpdateButtonStates(); SetStatus("Cycle stopped"); }
+                }
+            };
+
             ApplyAutoStart();
             Load      += MainForm_Load;
             FormClosing += MainForm_FormClosing;

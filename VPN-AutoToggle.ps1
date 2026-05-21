@@ -33,7 +33,7 @@ param(
     [string]$VpnName = "CloudflareWARP",
     
     [Parameter(Mandatory = $false)]
-    [bool]$UseWarp = $false,
+    [switch]$UseWarp,
     
     [Parameter(Mandatory = $false)]
     [int]$CycleDurationMinutes = 10,

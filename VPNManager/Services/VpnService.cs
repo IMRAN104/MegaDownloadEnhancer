@@ -26,21 +26,28 @@ namespace VPNManager.Services
             if (_isRunning)
                 return;
 
-            _isRunning = true;
-
-            var settingsJsonPath = CreateSettingsJsonFile(settings);
-
             var scriptPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "VPN-AutoToggle.ps1");
-
             if (!File.Exists(scriptPath))
-            {
                 throw new FileNotFoundException("VPN-AutoToggle.ps1 not found", scriptPath);
-            }
+
+            var useWarp = settings.VpnName.Equals("CloudflareWARP", StringComparison.OrdinalIgnoreCase);
+            var megasyncPath = FindMegasyncPath();
+            var logPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "VPN-AutoToggle.log");
+
+            // Pass parameters that match the PS1 param() block directly — NOT a JSON file
+            var args = $"-ExecutionPolicy Bypass -NonInteractive -File \"{scriptPath}\"" +
+                       $" -VpnName \"{settings.VpnName}\"" +
+                       (useWarp ? " -UseWarp" : "") +
+                       $" -CycleDurationMinutes {settings.CycleDurationMinutes}" +
+                       $" -MaxRetries {settings.MaxRetries}" +
+                       $" -MegasyncPath \"{megasyncPath}\"" +
+                       $" -MegasyncRestartDelaySeconds 5" +
+                       $" -LogPath \"{logPath}\"";
 
             var psi = new ProcessStartInfo
             {
                 FileName = "powershell.exe",
-                Arguments = $"-ExecutionPolicy Bypass -File \"{scriptPath}\" -SettingsPath \"{settingsJsonPath}\"",
+                Arguments = args,
                 UseShellExecute = false,
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
@@ -53,6 +60,7 @@ namespace VPNManager.Services
 
             if (_vpnProcess != null)
             {
+                _isRunning = true;
                 _vpnProcess.EnableRaisingEvents = true;
                 _vpnProcess.Exited += (s, e) =>
                 {
@@ -65,32 +73,6 @@ namespace VPNManager.Services
                     });
                 };
             }
-        }
-
-        private string CreateSettingsJsonFile(AppSettings settings)
-        {
-            var useWarp = settings.VpnName.Equals("CloudflareWARP", StringComparison.OrdinalIgnoreCase);
-
-            var psSettings = new
-            {
-                VpnName = settings.VpnName,
-                UseWarp = useWarp,
-                CycleDurationMinutes = settings.CycleDurationMinutes,
-                MaxRetries = settings.MaxRetries,
-                MegasyncPath = FindMegasyncPath(),
-                MegasyncRestartDelaySeconds = 5,
-                WarpUiPath = @"C:\Program Files\Cloudflare\Cloudflare WARP\Cloudflare WARP.exe",
-                LogPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "VPN-AutoToggle.log")
-            };
-
-            var settingsPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "vpn-settings.json");
-            var json = System.Text.Json.JsonSerializer.Serialize(psSettings, new System.Text.Json.JsonSerializerOptions
-            {
-                WriteIndented = true
-            });
-            File.WriteAllText(settingsPath, json);
-
-            return settingsPath;
         }
 
         private string FindMegasyncPath()
@@ -113,8 +95,7 @@ namespace VPNManager.Services
 
         public void StopVpnCycle()
         {
-            DisconnectAllVpn();
-
+            // Kill the cycle script first — stops all toggling immediately
             if (_vpnProcess != null && !_vpnProcess.HasExited)
             {
                 try
@@ -129,6 +110,9 @@ namespace VPNManager.Services
 
             DisposeProcess();
             _isRunning = false;
+
+            // Disconnect VPN after script is dead so we leave a clean state
+            DisconnectAllVpn();
         }
 
         private void DisposeProcess()
@@ -223,7 +207,9 @@ namespace VPNManager.Services
                     {
                         process.WaitForExit(5000);
                         var output = process.StandardOutput.ReadToEnd();
-                        return output.Contains("Connected", StringComparison.OrdinalIgnoreCase);
+                        // Must match "Status update: Connected" — NOT just "Connected"
+                        // because "Disconnected" also contains the substring "Connected"
+                        return output.Contains("Status update: Connected", StringComparison.OrdinalIgnoreCase);
                     }
                 }
                 catch (Exception)
