@@ -31,7 +31,7 @@ Set it once. Walk away. It runs silently in your system tray.
 
 **[⬇ Download Latest Release](https://github.com/IMRAN104/MegaDownloadEnhancer/releases/latest)**
 
-1. Download `VPNManager-v1.2.0-win-x64.zip`
+1. Download `VPNManager-vX.X.X-win-x64.zip` (latest version shown on release page)
 2. Extract anywhere
 3. Run `VPNManager.exe`
 4. Done
@@ -95,10 +95,6 @@ Extract the zip, launch `VPNManager.exe`. First-time setup opens automatically.
 The app minimizes to tray. Downloads continue uninterrupted.
 
 ---
-
-## Screenshots
-
-> _GUI with real-time VPN + MEGAsync status, dark/light theme, one-click cycle control._
 
 ---
 
