@@ -170,6 +170,7 @@ namespace VPNManager.Forms
 
             _footerPanel.Controls.Add(_lblFooterLeft);
             _footerPanel.Controls.Add(_lblFooterRight);
+            _footerPanel.Controls.Add(lblVer);
 
             // ── Content ─────────────────────────────────────────
             var content = DB(new Panel { Dock = DockStyle.Fill, BackColor = C_BG });
@@ -564,11 +565,10 @@ namespace VPNManager.Forms
                 if (_vpnService.IsRunning)
                 {
                     SetStatus("Stopping cycle…");
-                    _vpnService.StopVpnCycle();
+                    await Task.Run(() => _vpnService.StopVpnCycle());
                     _cycleStartTime = null;
                     SetStatus("Cycle stopped");
                     UpdateButtonStates();
-                    await Task.Delay(2000);
                     await UpdateVpnStatusAsync();
                     UpdateMegaStatus();
                 }
@@ -587,9 +587,6 @@ namespace VPNManager.Forms
                     _cycleStartTime = DateTime.Now;
                     SetStatus("Cycle running");
                     UpdateButtonStates();
-                    await Task.Delay(2000);
-                    await _megaService.RestartMegasyncAsync();
-                    await Task.Delay(1500);
                     await UpdateVpnStatusAsync();
                     UpdateMegaStatus();
                 }
@@ -708,7 +705,6 @@ namespace VPNManager.Forms
             _exiting = true;
             _refreshTimer.Stop(); _pulseTimer.Stop(); _clockTimer.Stop();
             _trayIcon.Visible = false;
-            _vpnService.StopVpnCycle();
             _vpnService.Dispose();
             Close();
         }

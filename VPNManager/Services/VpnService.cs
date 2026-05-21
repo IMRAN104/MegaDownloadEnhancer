@@ -9,7 +9,7 @@ namespace VPNManager.Services
     public class VpnService : IDisposable
     {
         private Process? _vpnProcess;
-        private bool _isRunning;
+        private volatile bool _isRunning;
         private readonly AppSettings _settings;
 
         public event EventHandler<VpnStatus>? StatusChanged;
@@ -175,8 +175,8 @@ namespace VPNManager.Services
                     using var process = Process.Start(psi);
                     if (process != null)
                     {
-                        process.WaitForExit(5000);
                         var output = process.StandardOutput.ReadToEnd();
+                        process.WaitForExit(5000);
                         return output.Trim().Equals("Connected", StringComparison.OrdinalIgnoreCase);
                     }
                 }
@@ -341,8 +341,8 @@ namespace VPNManager.Services
                 using var process = Process.Start(psi);
                 if (process != null)
                 {
-                    process.WaitForExit(5000);
                     var output = process.StandardOutput.ReadToEnd();
+                    process.WaitForExit(5000);
                     return output.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
                 }
             }
@@ -356,7 +356,7 @@ namespace VPNManager.Services
 
         public void Dispose()
         {
-            StopVpnCycle();
+            if (_isRunning) StopVpnCycle();
             DisposeProcess();
         }
     }
