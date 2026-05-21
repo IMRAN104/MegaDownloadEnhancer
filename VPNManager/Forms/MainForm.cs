@@ -84,17 +84,6 @@ namespace VPNManager.Forms
             FormClosing += MainForm_FormClosing;
             Resize += MainForm_Resize;
 
-            if (string.IsNullOrEmpty(_settings.VpnName))
-            {
-                BeginInvoke(new Action(() => ShowFirstTimeSetup()));
-            }
-
-            BeginInvoke(new Action(async () =>
-            {
-                await UpdateVpnStatusAsync();
-                UpdateMegaStatus();
-            }));
-
             ApplyAutoStart();
         }
 
@@ -413,6 +402,15 @@ namespace VPNManager.Forms
             _refreshTimer.Start();
             UpdateButtonStates();
             UpdateTrayAutoStartCheck();
+
+            if (string.IsNullOrEmpty(_settings.VpnName))
+                BeginInvoke(new Action(() => ShowFirstTimeSetup()));
+
+            BeginInvoke(new Action(async () =>
+            {
+                await UpdateVpnStatusAsync();
+                UpdateMegaStatus();
+            }));
         }
 
         private void MainForm_FormClosing(object sender, FormClosingEventArgs e)
