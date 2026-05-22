@@ -21,7 +21,7 @@ Six hours. For a file you need *now*.
 
 ## The Solution
 
-**Mega Download Enhancer** automatically cycles your IP address using Cloudflare WARP (free) on a timer, then restarts MEGAsync so it picks up the fresh IP. MEGA sees a new user. Downloads resume instantly.
+**Mega Download Enhancer** automatically cycles your IP address on a timer using any Windows VPN — Cloudflare WARP, OpenVPN, WireGuard, or any connection you already have — then restarts MEGAsync so it picks up the fresh IP. MEGA sees a new user. Downloads resume instantly.
 
 Set it once. Walk away. It runs silently in your system tray.
 
@@ -44,8 +44,8 @@ No .NET install needed. Self-contained, single folder, no registry mess.
 
 ```
 Every N minutes (default: 6):
-  1. Disconnect WARP  →  MEGA sees your real IP
-  2. Reconnect WARP   →  New IP assigned
+  1. Disconnect VPN   →  MEGA sees your real IP
+  2. Reconnect VPN    →  New IP assigned
   3. Restart MEGAsync →  Fresh session, quota reset
   4. Downloads resume at full speed
 ```
@@ -58,36 +58,37 @@ The cycle runs in the background. You get a system tray icon, balloon notificati
 
 | Feature | Details |
 |---------|---------|
-| **Auto IP cycling** | Cloudflare WARP or any Windows VPN |
+| **Any Windows VPN** | Works with Cloudflare WARP, OpenVPN, WireGuard, or any VPN in Windows Settings |
 | **MEGAsync companion** | Auto-detects and restarts the sync client |
 | **System tray** | Runs silently, always accessible |
 | **Dark / Light theme** | Follows Windows system preference |
 | **Auto-start with Windows** | Toggle from the tray menu |
 | **Configurable timing** | 1–60 minute cycles, your call |
-| **No account needed** | Works with free Cloudflare WARP |
 
 ---
 
 ## Requirements
 
 - Windows 10 or 11
-- [Cloudflare WARP](https://1.1.1.1/) (free — this is your IP rotator)
+- A VPN that changes your IP on reconnect — any of these work:
+  - **[Cloudflare WARP](https://1.1.1.1/)** (free, recommended — reconnects in ~2 seconds)
+  - Any VPN visible in Windows Settings → Network → VPN (OpenVPN, WireGuard, etc.)
 - MEGAsync desktop client (the thing you want to keep running)
 
-That's it. No VPN subscription. No paid proxy. No browser extension.
+That's it. No paid proxy. No browser extension.
 
 ---
 
 ## Quick Setup (2 minutes)
 
-### Step 1 — Install Cloudflare WARP
-Download from [1.1.1.1](https://1.1.1.1/) and connect once manually to make sure it works.
+### Step 1 — Have a VPN ready
+Any VPN that changes your IP on reconnect works. Don't have one? [Cloudflare WARP](https://1.1.1.1/) is free, fast, and takes 30 seconds to install. Connect it once manually to confirm it works.
 
 ### Step 2 — Run the app
 Extract the zip, launch `VPNManager.exe`. First-time setup opens automatically.
 
 ### Step 3 — Configure
-- Select `CloudflareWARP` from the VPN dropdown
+- Select your VPN from the dropdown (WARP users: select `CloudflareWARP`)
 - Set cycle duration (start with 6 minutes — matches MEGA's quota window)
 - Enable MEGAsync monitoring
 - Click **Start Cycle**
@@ -147,7 +148,8 @@ Yes. Closing the window minimizes to tray. Use *Exit* from the tray menu to full
 
 | Problem | Fix |
 |---------|-----|
-| WARP not found | Run `warp-cli.exe connect` in terminal to verify WARP is installed |
+| VPN not in dropdown | Add it in Windows Settings → Network & Internet → VPN first |
+| WARP not found | Run `warp-cli.exe status` in terminal to verify WARP is installed |
 | MEGAsync not detected | Open MEGAsync first, let it fully load |
 | Cycle starts but downloads don't resume | Increase cycle duration to 8–10 min |
 | VPN toggle fails | Run as Administrator |
