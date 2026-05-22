@@ -34,20 +34,9 @@ namespace VPNManager.Services
             var megasyncPath = FindMegasyncPath();
             var logPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "VPN-AutoToggle.log");
 
-            // Pass parameters that match the PS1 param() block directly — NOT a JSON file
-            var args = $"-ExecutionPolicy Bypass -NonInteractive -File \"{scriptPath}\"" +
-                       $" -VpnName \"{settings.VpnName}\"" +
-                       (useWarp ? " -UseWarp" : "") +
-                       $" -CycleDurationMinutes {settings.CycleDurationMinutes}" +
-                       $" -MaxRetries {settings.MaxRetries}" +
-                       $" -MegasyncPath \"{megasyncPath}\"" +
-                       $" -MegasyncRestartDelaySeconds 5" +
-                       $" -LogPath \"{logPath}\"";
-
             var psi = new ProcessStartInfo
             {
                 FileName = "powershell.exe",
-                Arguments = args,
                 UseShellExecute = false,
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
@@ -55,6 +44,18 @@ namespace VPNManager.Services
                 WindowStyle = ProcessWindowStyle.Hidden,
                 WorkingDirectory = AppDomain.CurrentDomain.BaseDirectory
             };
+
+            // Use ArgumentList (array form) — never interpolate user values into a command string
+            psi.ArgumentList.Add("-ExecutionPolicy"); psi.ArgumentList.Add("Bypass");
+            psi.ArgumentList.Add("-NonInteractive");
+            psi.ArgumentList.Add("-File"); psi.ArgumentList.Add(scriptPath);
+            psi.ArgumentList.Add("-VpnName"); psi.ArgumentList.Add(settings.VpnName);
+            if (useWarp) psi.ArgumentList.Add("-UseWarp");
+            psi.ArgumentList.Add("-CycleDurationMinutes"); psi.ArgumentList.Add(settings.CycleDurationMinutes.ToString());
+            psi.ArgumentList.Add("-MaxRetries"); psi.ArgumentList.Add(settings.MaxRetries.ToString());
+            psi.ArgumentList.Add("-MegasyncPath"); psi.ArgumentList.Add(megasyncPath);
+            psi.ArgumentList.Add("-MegasyncRestartDelaySeconds"); psi.ArgumentList.Add("5");
+            psi.ArgumentList.Add("-LogPath"); psi.ArgumentList.Add(logPath);
 
             _vpnProcess = Process.Start(psi);
 
@@ -163,14 +164,18 @@ namespace VPNManager.Services
             {
                 try
                 {
+                    // VPN name passed via env var — never interpolated into the command string
                     var psi = new ProcessStartInfo
                     {
                         FileName = "powershell.exe",
-                        Arguments = $"Get-VpnConnection -Name \"{vpnName}\" | Select-Object -ExpandProperty ConnectionStatus",
                         UseShellExecute = false,
                         RedirectStandardOutput = true,
                         CreateNoWindow = true
                     };
+                    psi.ArgumentList.Add("-NonInteractive");
+                    psi.ArgumentList.Add("-Command");
+                    psi.ArgumentList.Add("Get-VpnConnection -Name $env:_VPN_NAME | Select-Object -ExpandProperty ConnectionStatus");
+                    psi.Environment["_VPN_NAME"] = vpnName;
 
                     using var process = Process.Start(psi);
                     if (process != null)
@@ -276,11 +281,14 @@ namespace VPNManager.Services
                 var psi = new ProcessStartInfo
                 {
                     FileName = "powershell.exe",
-                    Arguments = $"Get-VpnConnection -Name \"{vpnName}\" -ErrorAction SilentlyContinue",
                     UseShellExecute = false,
                     RedirectStandardOutput = true,
                     CreateNoWindow = true
                 };
+                psi.ArgumentList.Add("-NonInteractive");
+                psi.ArgumentList.Add("-Command");
+                psi.ArgumentList.Add("Get-VpnConnection -Name $env:_VPN_NAME -ErrorAction SilentlyContinue");
+                psi.Environment["_VPN_NAME"] = vpnName;
 
                 using var process = Process.Start(psi);
                 if (process != null)
