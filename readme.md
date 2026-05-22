@@ -70,12 +70,12 @@ The cycle runs in the background. You get a system tray icon, balloon notificati
 ## Requirements
 
 - Windows 10 or 11
-- A VPN that changes your IP on reconnect — any of these work:
-  - **[Cloudflare WARP](https://1.1.1.1/)** (free, recommended — reconnects in ~2 seconds)
-  - Any VPN visible in Windows Settings → Network → VPN (OpenVPN, WireGuard, etc.)
-- MEGAsync desktop client (the thing you want to keep running)
+- **A VPN that changes your IP on reconnect** (required — this is the core mechanism):
+  - **[Cloudflare WARP](https://1.1.1.1/)** — free, recommended, reconnects in ~2 seconds
+  - Any VPN connection in Windows Settings → Network → VPN (OpenVPN, WireGuard, commercial VPNs, etc.)
+- MEGAsync desktop client
 
-That's it. No paid proxy. No browser extension.
+No proxy. No browser extension. A VPN is the only external dependency.
 
 ---
 

@@ -1,137 +1,67 @@
 # Changelog
 
-All notable changes to the VPN Auto-Toggle project will be documented in this file.
-
-## [1.0.0] - 2024-01-15
-
-### 🎉 Initial Release
-
-#### Added
-- **VPN-AutoToggle.ps1** - Main automation script with full functionality
-  - Automatic VPN connection toggling (on/off cycles)
-  - Configurable cycle duration (default: 10 minutes)
-  - Robust error handling with retry logic
-  - Comprehensive logging system
-  - Real-time status display with countdown timer
-  - Graceful shutdown on Ctrl+C
-  - Support for both saved and explicit credentials
-  - Windows native VPN management using rasdial
-
-- **Test-VpnSetup.ps1** - System validation and testing tool
-  - PowerShell version check
-  - Administrator privilege detection
-  - Execution policy verification
-  - VPN module availability check
-  - VPN connection enumeration
-  - Specific VPN connection validation
-  - rasdial command availability check
-  - Script file existence verification
-
-- **Documentation**
-  - README.md - Comprehensive project overview
-  - QUICK-START.md - Quick reference guide for immediate use
-  - SETUP-AND-USAGE.md - Detailed setup instructions and troubleshooting
-  - EXAMPLES.md - Real-world usage examples and scenarios
-  - CHANGELOG.md - Version history (this file)
-
-#### Features
-- ✅ Automatic VPN cycling with configurable intervals
-- ✅ Retry logic for failed connections (default: 3 attempts)
-- ✅ Color-coded console output (Info/Warning/Error/Success)
-- ✅ Persistent logging to file
-- ✅ Live countdown display during wait periods
-- ✅ Current state tracking (Connected/Disconnected)
-- ✅ Cycle counter for monitoring
-- ✅ Interrupt handling for clean shutdown
-- ✅ Detailed error messages and recommendations
-- ✅ Support for custom log paths
-- ✅ Configurable maximum retry attempts
-
-#### Parameters
-- `VpnName` (Required) - Name of VPN connection
-- `Username` (Optional) - VPN username
-- `Password` (Optional) - VPN password
-- `CycleDurationMinutes` (Optional, Default: 10) - Duration for each state
-- `LogPath` (Optional, Default: .\VPN-AutoToggle.log) - Log file location
-- `MaxRetries` (Optional, Default: 3) - Connection retry attempts
-
-#### Technical Details
-- PowerShell 5.1+ compatible
-- Uses Windows built-in rasdial command
-- Leverages Get-VpnConnection cmdlet for status checks
-- Event-driven Ctrl+C handling
-- Modular function design for maintainability
-
-#### Testing
-- Comprehensive test script included
-- 8 validation checks covering all prerequisites
-- Success rate calculation
-- Detailed recommendations for failed tests
-- Ready-to-use test commands
-
-#### Documentation Highlights
-- Quick start guide (3 steps to get running)
-- 15+ usage examples covering common scenarios
-- Troubleshooting guide with solutions
-- Security best practices
-- Task Scheduler integration instructions
-- Real-time monitoring examples
-- Log analysis commands
-
-### Known Limitations
-- Windows-only (uses Windows-specific VPN commands)
-- Requires VPN connection to be pre-configured in Windows
-- Administrator privileges recommended for best results
-- Console window must remain open (or run as scheduled task)
-
-### Future Considerations
-- Cross-platform support (macOS, Linux)
-- GUI interface option
-- Email notifications for failures
-- Multiple VPN support (rotate between different VPNs)
-- Configuration file support
-- Service/daemon mode
-- Web dashboard for monitoring
-- Statistics and reporting
+All notable changes to Mega Download Enhancer are documented here.
 
 ---
 
-## Version History
+## [v1.3.0] — 2026-05-22
 
-### Version Numbering
-This project follows [Semantic Versioning](https://semver.org/):
-- **MAJOR** version for incompatible API changes
-- **MINOR** version for new functionality in a backward compatible manner
-- **PATCH** version for backward compatible bug fixes
+### Fixed
+- **Stop cycle now works correctly** — the PowerShell VPN cycle script was never actually running due to a wrong parameter name (`-SettingsPath`) being passed; replaced with correct individual parameters matching the script's `param()` block
+- **`-UseWarp` boolean binding** — PowerShell's `-File` mode can't coerce string arguments to `[bool]`; changed parameter to `[switch]$UseWarp` so it binds correctly when called from the app
+- **UI freeze on Stop** — `StopVpnCycle` now runs on a background thread; previously blocked the UI for up to 15 seconds while killing the process and disconnecting the VPN
+- **Double MEGAsync restart on Start** — the app was restarting MEGAsync immediately on Start, then the PS script restarted it again ~15 seconds later; removed the redundant C# restart
+- **Double-disconnect on app exit** — `Dispose` was calling `StopVpnCycle` then `Dispose` again internally, causing two VPN disconnect attempts on shutdown
+- **WARP false-positive status** — `"Disconnected".Contains("Connected")` returned `true`, making WARP appear connected when it wasn't; fixed to match `"Status update: Connected"`
+- **Process stdout deadlock** — `WaitForExit` was called before `ReadToEnd`, which could deadlock if the subprocess wrote more than 4 KB to stdout
+- **Thread safety** — `_isRunning` flag marked `volatile` to prevent JIT caching across UI thread and `Process.Exited` ThreadPool callback
 
-### Release Notes Format
-- 🎉 Initial Release
-- ✨ New Features
-- 🐛 Bug Fixes
-- 📝 Documentation
-- ⚡ Performance Improvements
-- 🔒 Security Updates
-- ⚠️ Breaking Changes
-- 🗑️ Deprecations
+### Security
+- **Command injection in PowerShell invocations** — user-supplied VPN name was interpolated directly into PowerShell argument strings, allowing injection via embedded quotes/semicolons; fixed by switching to `ProcessStartInfo.ArgumentList` (array form) for the main script launch, and passing VPN name via environment variable (`$env:_VPN_NAME`) for inline status check commands
 
----
-
-## Upgrade Guide
-
-### From Future Versions
-(This section will be populated when new versions are released)
+### Changed
+- VPN name and path arguments now use `ArgumentList` instead of string interpolation
+- UI auto-updates when the PS cycle exits unexpectedly (wired `StatusChanged` event)
+- App exit calls `Dispose` only — no redundant `StopVpnCycle` before dispose
 
 ---
 
-## Contributing
+## [v1.2.0] — 2026-05-21
 
-When contributing to this project, please:
-1. Update this CHANGELOG.md with your changes
-2. Follow the existing format and emoji conventions
-3. Place new entries under "Unreleased" section
-4. Move to versioned section upon release
+### Added
+- **Complete UI/UX redesign** — dark theme (`#070B12` base), teal accent (`#00CFA8`), animated status dots, cycle progress display, live clock in footer
+- **Custom app icon** — programmatic teal lightning bolt on dark rounded background (GDI+), used in window, tray, and about dialog
+- **About dialog** — version, description, GitHub link, rendered entirely via GDI+ canvas
+- **Responsive layout** — cards reposition on window resize
+- **System tray improvements** — balloon notifications on state changes, context menu with Start/Stop/Settings/Exit
+- **GitHub Actions release pipeline** — push a `v*.*.*` tag → automatic self-contained `win-x64` build and GitHub Release
+
+### Fixed
+- **Startup crash** — `BeginInvoke cannot be called before window handle created`; moved both `BeginInvoke` calls to the `Load` event handler
+- **YAML syntax error** in `release.yml` — PowerShell heredocs at column 0 terminated the YAML block scalar; replaced with array join patterns
+- **Dark/light theme** — now follows Windows system preference automatically
+
+### Changed
+- Settings form redesigned with sidebar navigation (VPN / General / Appearance)
+- README rewritten with compelling pitch targeting the "Transfer quota exceeded" pain point
 
 ---
 
-**Note**: This is the initial release (v1.0.0). Future updates will be documented here.
+## [v1.0.0] — 2026-05-20
 
+### Added
+- Initial release
+- WinForms app that cycles any Windows VPN connection on a configurable timer
+- Cloudflare WARP support via `warp-cli.exe`
+- MEGAsync auto-detect and restart
+- `VPN-AutoToggle.ps1` PowerShell script — usable standalone or driven by the GUI
+- `Test-VpnSetup.ps1` — 8-check prerequisite validator
+- Settings persistence to `%APPDATA%\VPNManager\settings.json`
+- DPAPI password encryption for stored VPN credentials
+- GitHub Actions CI/CD — build and test on every push
+
+---
+
+[v1.3.0]: https://github.com/IMRAN104/MegaDownloadEnhancer/releases/tag/v1.3.0
+[v1.2.0]: https://github.com/IMRAN104/MegaDownloadEnhancer/releases/tag/v1.2.0
+[v1.0.0]: https://github.com/IMRAN104/MegaDownloadEnhancer/releases/tag/v1.0.0
