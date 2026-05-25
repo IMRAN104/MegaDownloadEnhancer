@@ -13,10 +13,10 @@
 param(
     [Parameter(Mandatory = $false)]
     [string]$VpnName = "CloudflareWARP",
-    
+
     [Parameter(Mandatory = $false)]
     [bool]$UseWarp = $true,
-    
+
     [Parameter(Mandatory = $false)]
     [string]$MegasyncPath = ""
 )
@@ -101,7 +101,7 @@ Write-Host "`nTesting MEGAsync Restart..." -ForegroundColor Yellow
 # Find the script to source the function
 . .\VPN-AutoToggle.ps1 -SettingsPath $SettingsPath -ErrorAction SilentlyContinue # This might start the loop, but we just want the function loaded
 
-# If sourcing started the loop, this test is harder. 
+# If sourcing started the loop, this test is harder.
 # Let's just run the helper logic directly
 Write-Host "Killing old MEGAsync (if any)..."
 Stop-Process -Name "MEGAsync" -Force -ErrorAction SilentlyContinue

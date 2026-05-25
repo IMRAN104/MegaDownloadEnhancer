@@ -31,25 +31,25 @@
 param(
     [Parameter(Mandatory = $false)]
     [string]$VpnName = "CloudflareWARP",
-    
+
     [Parameter(Mandatory = $false)]
     [switch]$UseWarp,
-    
+
     [Parameter(Mandatory = $false)]
     [int]$CycleDurationMinutes = 10,
-    
+
     [Parameter(Mandatory = $false)]
     [int]$MaxRetries = 3,
-    
+
     [Parameter(Mandatory = $false)]
     [string]$MegasyncPath = "",
-    
+
     [Parameter(Mandatory = $false)]
     [int]$MegasyncRestartDelaySeconds = 5,
-    
+
     [Parameter(Mandatory = $false)]
     [string]$WarpUiPath = "C:\Program Files\Cloudflare\Cloudflare WARP\Cloudflare WARP.exe",
-    
+
     [Parameter(Mandatory = $false)]
     [string]$LogPath = ".\VPN-AutoToggle.log"
 )
@@ -89,10 +89,10 @@ function Write-Log {
         [ValidateSet('Info', 'Warning', 'Error', 'Success', 'Mega')]
         [string]$Level = 'Info'
     )
-    
+
     $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
     $logMessage = "[$timestamp] [$Level] $Message"
-    
+
     $color = switch ($Level) {
         'Info' { 'White' }
         'Warning' { 'Yellow' }
@@ -100,7 +100,7 @@ function Write-Log {
         'Success' { 'Green' }
         'Mega' { 'Cyan' }
     }
-    
+
     Write-Host $logMessage -ForegroundColor $color
     Add-Content -Path $LogPath -Value $logMessage
 }
@@ -131,7 +131,7 @@ function Connect-VpnWithRetry {
     for ($i = 1; $i -le $MaxRetries; $i++) {
         try {
             Write-Log "Attempting to connect (Attempt $i of $MaxRetries)..." -Level Info
-            
+
             if ($UseWarp) {
                 # Ensure WARP UI is running
                 if ($i -eq 1) { Start-WarpUi }
@@ -140,7 +140,7 @@ function Connect-VpnWithRetry {
             else {
                 rasdial $VpnName | Out-Null
             }
-            
+
             Start-Sleep -Seconds 10
             $status = Test-VpnConnection
             if ($status.Connected) {
@@ -152,7 +152,7 @@ function Connect-VpnWithRetry {
         catch {
             Write-Log "Connection failed: $($_.Exception.Message)" -Level Error
         }
-        
+
         if ($i -lt $MaxRetries) { Start-Sleep -Seconds 10 }
     }
     return $false
@@ -162,14 +162,14 @@ function Disconnect-VpnWithRetry {
     for ($i = 1; $i -le $MaxRetries; $i++) {
         try {
             Write-Log "Attempting to disconnect (Attempt $i of $MaxRetries)..." -Level Info
-            
+
             if ($UseWarp) {
                 warp-cli disconnect | Out-Null
             }
             else {
                 rasdial $VpnName /disconnect | Out-Null
             }
-            
+
             Start-Sleep -Seconds 5
             $status = Test-VpnConnection
             if (-not $status.Connected) {
@@ -181,7 +181,7 @@ function Disconnect-VpnWithRetry {
         catch {
             Write-Log "Disconnection failed: $($_.Exception.Message)" -Level Error
         }
-        
+
         if ($i -lt $MaxRetries) { Start-Sleep -Seconds 5 }
     }
     return $false
@@ -189,7 +189,7 @@ function Disconnect-VpnWithRetry {
 
 function Restart-Megasync {
     Write-Log "Restarting MEGAsync..." -Level Mega
-    
+
     # Kill process if running
     $process = Get-Process -Name "MEGAsync" -ErrorAction SilentlyContinue
     if ($process) {
@@ -253,7 +253,7 @@ function Wait-WithCountdown {
 # Main Loop
 function Start-Main {
     Write-Host "`n=== VPN & MEGAsync Auto-Toggle ===" -ForegroundColor Cyan
-    
+
     # Verify Initial State
     $status = Test-VpnConnection
     if (-not $status.Exists) {
