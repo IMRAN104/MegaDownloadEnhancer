@@ -49,16 +49,16 @@ namespace VPNManager.Forms
         private bool _exiting;
 
         // ── Palette ──────────────────────────────────────────────
-        static readonly Color C_BG      = Color.FromArgb(7,   11,  18);
-        static readonly Color C_SURFACE = Color.FromArgb(13,  20,  32);
-        static readonly Color C_SURF2   = Color.FromArgb(18,  27,  44);
-        static readonly Color C_BORDER  = Color.FromArgb(28,  40,  68);
-        static readonly Color C_ACCENT  = Color.FromArgb(0,  207, 168);
-        static readonly Color C_BLUE    = Color.FromArgb(59, 130, 246);
-        static readonly Color C_DANGER  = Color.FromArgb(255,  58,  90);
-        static readonly Color C_TEXT1   = Color.FromArgb(226, 235, 248);
-        static readonly Color C_TEXT2   = Color.FromArgb(80,  105, 145);
-        static readonly Color C_DIM     = Color.FromArgb(24,  36,  58);
+        static readonly Color C_BG = Color.FromArgb(7, 11, 18);
+        static readonly Color C_SURFACE = Color.FromArgb(13, 20, 32);
+        static readonly Color C_SURF2 = Color.FromArgb(18, 27, 44);
+        static readonly Color C_BORDER = Color.FromArgb(28, 40, 68);
+        static readonly Color C_ACCENT = Color.FromArgb(0, 207, 168);
+        static readonly Color C_BLUE = Color.FromArgb(59, 130, 246);
+        static readonly Color C_DANGER = Color.FromArgb(255, 58, 90);
+        static readonly Color C_TEXT1 = Color.FromArgb(226, 235, 248);
+        static readonly Color C_TEXT2 = Color.FromArgb(80, 105, 145);
+        static readonly Color C_DIM = Color.FromArgb(24, 36, 58);
 
         public MainForm()
         {
@@ -96,14 +96,14 @@ namespace VPNManager.Forms
                     if (InvokeRequired)
                         BeginInvoke(() => { _cycleStartTime = null; UpdateButtonStates(); SetStatus("Cycle stopped"); });
                     else
-                        { _cycleStartTime = null; UpdateButtonStates(); SetStatus("Cycle stopped"); }
+                    { _cycleStartTime = null; UpdateButtonStates(); SetStatus("Cycle stopped"); }
                 }
             };
 
             ApplyAutoStart();
-            Load      += MainForm_Load;
+            Load += MainForm_Load;
             FormClosing += MainForm_FormClosing;
-            Resize    += (s, e) => { if (WindowState == FormWindowState.Minimized) Hide(); };
+            Resize += (s, e) => { if (WindowState == FormWindowState.Minimized) Hide(); };
         }
 
         // ── Init ─────────────────────────────────────────────────
@@ -248,13 +248,13 @@ namespace VPNManager.Forms
         {
             _trayMenu = new ContextMenuStrip();
             StyleContextMenu(_trayMenu);
-            Add(_trayMenu, "Show",                        (s, e) => ShowWindow());
-            Add(_trayMenu, "▶  Start Cycle",              (s, e) => { if (!_vpnService.IsRunning) BtnToggle_Click(s, e); });
-            Add(_trayMenu, "■  Stop Cycle",               (s, e) => { if (_vpnService.IsRunning)  BtnToggle_Click(s, e); });
+            Add(_trayMenu, "Show", (s, e) => ShowWindow());
+            Add(_trayMenu, "▶  Start Cycle", (s, e) => { if (!_vpnService.IsRunning) BtnToggle_Click(s, e); });
+            Add(_trayMenu, "■  Stop Cycle", (s, e) => { if (_vpnService.IsRunning) BtnToggle_Click(s, e); });
             _trayMenu.Items.Add(new ToolStripSeparator());
             Add(_trayMenu, "    Auto-start with Windows", ToggleAutoStart);
             _trayMenu.Items.Add(new ToolStripSeparator());
-            Add(_trayMenu, "Exit",                        (s, e) => Shutdown());
+            Add(_trayMenu, "Exit", (s, e) => Shutdown());
 
             _trayIcon = new NotifyIcon
             {
@@ -473,9 +473,9 @@ namespace VPNManager.Forms
             if (running && _cycleStartTime.HasValue)
             {
                 double totalSec = _settings.CycleDurationMinutes * 60.0;
-                double elapsed  = (DateTime.Now - _cycleStartTime.Value).TotalSeconds % totalSec;
+                double elapsed = (DateTime.Now - _cycleStartTime.Value).TotalSeconds % totalSec;
                 progress = (float)(elapsed / totalSec);
-                double remain  = totalSec - elapsed;
+                double remain = totalSec - elapsed;
                 timeLabel = remain < 60 ? $"{(int)remain}s" : $"{(int)(remain / 60)}m {(int)(remain % 60):D2}s";
             }
 
@@ -668,12 +668,42 @@ namespace VPNManager.Forms
             {
                 using var key = Registry.CurrentUser.OpenSubKey(
                     @"Software\Microsoft\Windows\CurrentVersion\Run", true);
+
+                if (key == null)
+                {
+                    System.Diagnostics.Debug.WriteLine(
+                        "[AutoStart] Failed to open HKCU Run key — key is null");
+                    return;
+                }
+
                 if (_settings.AutoStart)
-                    key?.SetValue("MegaDownloadEnhancer", $"\"{Application.ExecutablePath}\"");
+                {
+                    var path = $"\"{Application.ExecutablePath}\"";
+                    key.SetValue("MegaDownloadEnhancer", path);
+                    System.Diagnostics.Debug.WriteLine(
+                        $"[AutoStart] Registered: {path}");
+                }
                 else
-                    key?.DeleteValue("MegaDownloadEnhancer", false);
+                {
+                    var existing = key.GetValue("MegaDownloadEnhancer");
+                    if (existing != null)
+                    {
+                        key.DeleteValue("MegaDownloadEnhancer", false);
+                        System.Diagnostics.Debug.WriteLine(
+                            "[AutoStart] Removed registry entry");
+                    }
+                    else
+                    {
+                        System.Diagnostics.Debug.WriteLine(
+                            "[AutoStart] No registry entry to remove (already clean)");
+                    }
+                }
             }
-            catch { }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine(
+                    $"[AutoStart] Error: {ex.Message}");
+            }
         }
 
         // ── Validation ───────────────────────────────────────────
@@ -747,7 +777,7 @@ namespace VPNManager.Forms
             };
             b.FlatAppearance.BorderSize = 0;
             b.FlatAppearance.MouseOverBackColor = Lighten(bg, 20);
-            b.FlatAppearance.MouseDownBackColor  = Darken(bg, 15);
+            b.FlatAppearance.MouseDownBackColor = Darken(bg, 15);
             return b;
         }
 

@@ -8,12 +8,12 @@ namespace VPNManager.Forms
 {
     public class AboutDialog : Form
     {
-        static readonly Color C_BG      = Color.FromArgb(7,   11,  18);
-        static readonly Color C_SURFACE = Color.FromArgb(13,  20,  32);
-        static readonly Color C_BORDER  = Color.FromArgb(28,  40,  68);
-        static readonly Color C_ACCENT  = Color.FromArgb(0,  207, 168);
-        static readonly Color C_TEXT1   = Color.FromArgb(226, 235, 248);
-        static readonly Color C_TEXT2   = Color.FromArgb(80,  105, 145);
+        static readonly Color C_BG = Color.FromArgb(7, 11, 18);
+        static readonly Color C_SURFACE = Color.FromArgb(13, 20, 32);
+        static readonly Color C_BORDER = Color.FromArgb(28, 40, 68);
+        static readonly Color C_ACCENT = Color.FromArgb(0, 207, 168);
+        static readonly Color C_TEXT1 = Color.FromArgb(226, 235, 248);
+        static readonly Color C_TEXT2 = Color.FromArgb(80, 105, 145);
 
         public AboutDialog()
         {

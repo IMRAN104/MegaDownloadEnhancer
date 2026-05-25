@@ -7,8 +7,8 @@ namespace VPNManager.Forms
 {
     public static class AppIcon
     {
-        static readonly Color BG    = Color.FromArgb(8, 12, 20);
-        static readonly Color Teal  = Color.FromArgb(0, 207, 168);
+        static readonly Color BG = Color.FromArgb(8, 12, 20);
+        static readonly Color Teal = Color.FromArgb(0, 207, 168);
         static readonly Color Teal2 = Color.FromArgb(0, 148, 120);
 
         public static Icon Create(int size = 32)

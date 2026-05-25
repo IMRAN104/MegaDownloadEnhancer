@@ -18,7 +18,7 @@ namespace VPNManager.Models
         public string MonitoredProcessName { get; set; } = "MEGAsync";
         public string MonitoredProcessDisplayName { get; set; } = "MEGAsync";
         public bool ProcessMonitoringEnabled { get; set; } = true;
-        public bool AutoStart { get; set; } = true;
+        public bool AutoStart { get; set; } = false;
         public ThemeMode ThemeMode { get; set; } = ThemeMode.System;
 
         private static readonly string SettingsPath = Path.Combine(
@@ -41,11 +41,23 @@ namespace VPNManager.Models
                 {
                     var json = File.ReadAllText(SettingsPath);
                     var settings = JsonSerializer.Deserialize<AppSettings>(json);
-                    return settings ?? new AppSettings();
+                    if (settings != null)
+                    {
+                        System.Diagnostics.Debug.WriteLine(
+                            $"[Settings] Loaded from {SettingsPath} (AutoStart={settings.AutoStart})");
+                        return settings;
+                    }
+                }
+                else
+                {
+                    System.Diagnostics.Debug.WriteLine(
+                        $"[Settings] No settings file at {SettingsPath}, using defaults");
                 }
             }
-            catch (Exception)
+            catch (Exception ex)
             {
+                System.Diagnostics.Debug.WriteLine(
+                    $"[Settings] Load failed: {ex.Message}");
             }
 
             return new AppSettings();
@@ -68,9 +80,13 @@ namespace VPNManager.Models
 
                 var json = JsonSerializer.Serialize(this, options);
                 File.WriteAllText(SettingsPath, json);
+                System.Diagnostics.Debug.WriteLine(
+                    $"[Settings] Saved to {SettingsPath} (AutoStart={AutoStart})");
             }
-            catch (Exception)
+            catch (Exception ex)
             {
+                System.Diagnostics.Debug.WriteLine(
+                    $"[Settings] Save failed: {ex.Message}");
             }
         }
     }

@@ -1,0 +1,44 @@
+# ============================================
+# EditorConfig — VPNManager
+# Ensures consistent code style across editors
+# ============================================
+
+root = true
+
+# Default: all files
+[*]
+charset = utf-8
+end_of_line = crlf
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+# C# source files
+[*.cs]
+indent_style = space
+indent_size = 4
+
+# Naming rules: relaxed for WinForms designer compatibility
+# IDE1006 (private field naming) set to none — WinForms designer
+# generates field names that don't follow _camelCase convention
+dotnet_diagnostic.IDE1006.severity = none
+
+# Organize using directives
+dotnet_sort_system_directives_first = true
+dotnet_separate_import_directive_groups = false
+
+# XML doc comments required on public APIs
+dotnet_diagnostic.CS1591.severity = suggestion
+
+# PowerShell files
+[*.ps1]
+indent_style = space
+indent_size = 4
+
+# Markdown / docs
+[*.md]
+trim_trailing_whitespace = false
+
+# JSON / config
+[*.{json,xml,config,csproj}]
+indent_style = space
+indent_size = 2

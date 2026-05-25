@@ -41,14 +41,14 @@ namespace VPNManager.Forms
         private ComboBox _cmbTheme = null!;
 
         // ── Palette ──────────────────────────────────────────────
-        static readonly Color C_BG      = Color.FromArgb(7,   11,  18);
-        static readonly Color C_SURFACE = Color.FromArgb(13,  20,  32);
-        static readonly Color C_SURF2   = Color.FromArgb(18,  27,  44);
-        static readonly Color C_BORDER  = Color.FromArgb(28,  40,  68);
-        static readonly Color C_ACCENT  = Color.FromArgb(0,  207, 168);
-        static readonly Color C_TEXT1   = Color.FromArgb(226, 235, 248);
-        static readonly Color C_TEXT2   = Color.FromArgb(80,  105, 145);
-        static readonly Color C_INPUT   = Color.FromArgb(16,  24,  38);
+        static readonly Color C_BG = Color.FromArgb(7, 11, 18);
+        static readonly Color C_SURFACE = Color.FromArgb(13, 20, 32);
+        static readonly Color C_SURF2 = Color.FromArgb(18, 27, 44);
+        static readonly Color C_BORDER = Color.FromArgb(28, 40, 68);
+        static readonly Color C_ACCENT = Color.FromArgb(0, 207, 168);
+        static readonly Color C_TEXT1 = Color.FromArgb(226, 235, 248);
+        static readonly Color C_TEXT2 = Color.FromArgb(80, 105, 145);
+        static readonly Color C_INPUT = Color.FromArgb(16, 24, 38);
 
         public SettingsForm(AppSettings settings)
         {
@@ -192,20 +192,58 @@ namespace VPNManager.Forms
 
         private void SwitchSection(string section)
         {
+            // Preserve any edits on the current section before switching
+            PersistCurrentSection();
+
             _currentSection = section;
             _contentArea.Controls.Clear();
 
             _activeSection = section switch
             {
-                "VPN"        => BuildVpnSection(),
-                "General"    => BuildGeneralSection(),
+                "VPN" => BuildVpnSection(),
+                "General" => BuildGeneralSection(),
                 "Appearance" => BuildAppearanceSection(),
-                _            => BuildVpnSection()
+                _ => BuildVpnSection()
             };
 
             _contentArea.Controls.Add(_activeSection);
             _sidebar.Invalidate(true);
             LoadSettings();
+        }
+
+        /// <summary>
+        /// Saves the current section's UI values back to the _settings object (in-memory only).
+        /// Called before switching sections so edits aren't silently discarded.
+        /// </summary>
+        private void PersistCurrentSection()
+        {
+            switch (_currentSection)
+            {
+                case "VPN":
+                    if (_cmbVpnName != null) _settings.VpnName = _cmbVpnName.Text;
+                    if (_numCycleDuration != null) _settings.CycleDurationMinutes = (int)_numCycleDuration.Value;
+                    if (_numMaxRetries != null) _settings.MaxRetries = (int)_numMaxRetries.Value;
+                    if (_chkUseSavedCreds != null)
+                    {
+                        _settings.Username = _chkUseSavedCreds.Checked ? "" : _txtUsername.Text;
+                        _settings.Password = _chkUseSavedCreds.Checked ? "" : _txtPassword.Text;
+                    }
+                    break;
+
+                case "General":
+                    if (_chkMinimize != null) _settings.MinimizeToTray = _chkMinimize.Checked;
+                    if (_chkStartMinimized != null) _settings.StartMinimized = _chkStartMinimized.Checked;
+                    if (_chkAutoStart != null) _settings.AutoStart = _chkAutoStart.Checked;
+                    if (_numRefresh != null) _settings.StatusRefreshIntervalSeconds = (int)_numRefresh.Value;
+                    if (_chkMonitoring != null) _settings.ProcessMonitoringEnabled = _chkMonitoring.Checked;
+                    if (_txtProcessName != null) _settings.MonitoredProcessName = _txtProcessName.Text.Trim();
+                    if (_txtProcessDisplay != null) _settings.MonitoredProcessDisplayName = _txtProcessDisplay.Text.Trim();
+                    break;
+
+                case "Appearance":
+                    if (_cmbTheme != null) _settings.ThemeMode = (ThemeMode)_cmbTheme.SelectedIndex;
+                    break;
+            }
         }
 
         // ── Section builders ─────────────────────────────────────
@@ -284,9 +322,9 @@ namespace VPNManager.Forms
             int y = 0;
 
             SectionTitle(p, "Window Behavior", ref y);
-            _chkMinimize      = DarkCheck(p, "Minimize to system tray on close", ref y);
-            _chkStartMinimized = DarkCheck(p, "Start minimized",                  ref y);
-            _chkAutoStart     = DarkCheck(p, "Auto-start with Windows",            ref y);
+            _chkMinimize = DarkCheck(p, "Minimize to system tray on close", ref y);
+            _chkStartMinimized = DarkCheck(p, "Start minimized", ref y);
+            _chkAutoStart = DarkCheck(p, "Auto-start with Windows", ref y);
 
             SectionDivider(p, ref y);
             SectionTitle(p, "Status Polling", ref y);
@@ -352,7 +390,7 @@ namespace VPNManager.Forms
                 _cmbVpnName.Text = _settings.VpnName;
             }
             if (_numCycleDuration != null) _numCycleDuration.Value = _settings.CycleDurationMinutes;
-            if (_numMaxRetries != null)    _numMaxRetries.Value    = _settings.MaxRetries;
+            if (_numMaxRetries != null) _numMaxRetries.Value = _settings.MaxRetries;
             if (_chkUseSavedCreds != null)
             {
                 _chkUseSavedCreds.Checked = string.IsNullOrEmpty(_settings.Username);
@@ -361,34 +399,34 @@ namespace VPNManager.Forms
                 _txtUsername.Enabled = !_chkUseSavedCreds.Checked;
                 _txtPassword.Enabled = !_chkUseSavedCreds.Checked;
             }
-            if (_chkMinimize != null)       _chkMinimize.Checked       = _settings.MinimizeToTray;
+            if (_chkMinimize != null) _chkMinimize.Checked = _settings.MinimizeToTray;
             if (_chkStartMinimized != null) _chkStartMinimized.Checked = _settings.StartMinimized;
-            if (_chkAutoStart != null)      _chkAutoStart.Checked      = _settings.AutoStart;
-            if (_numRefresh != null)        _numRefresh.Value           = _settings.StatusRefreshIntervalSeconds;
-            if (_chkMonitoring != null)     _chkMonitoring.Checked     = _settings.ProcessMonitoringEnabled;
-            if (_txtProcessName != null)    _txtProcessName.Text        = _settings.MonitoredProcessName;
-            if (_txtProcessDisplay != null) _txtProcessDisplay.Text     = _settings.MonitoredProcessDisplayName;
-            if (_cmbTheme != null)          _cmbTheme.SelectedIndex     = (int)_settings.ThemeMode;
+            if (_chkAutoStart != null) _chkAutoStart.Checked = _settings.AutoStart;
+            if (_numRefresh != null) _numRefresh.Value = _settings.StatusRefreshIntervalSeconds;
+            if (_chkMonitoring != null) _chkMonitoring.Checked = _settings.ProcessMonitoringEnabled;
+            if (_txtProcessName != null) _txtProcessName.Text = _settings.MonitoredProcessName;
+            if (_txtProcessDisplay != null) _txtProcessDisplay.Text = _settings.MonitoredProcessDisplayName;
+            if (_cmbTheme != null) _cmbTheme.SelectedIndex = (int)_settings.ThemeMode;
         }
 
         private void SaveSettings()
         {
-            if (_cmbVpnName != null)       _settings.VpnName = _cmbVpnName.Text;
+            if (_cmbVpnName != null) _settings.VpnName = _cmbVpnName.Text;
             if (_numCycleDuration != null) _settings.CycleDurationMinutes = (int)_numCycleDuration.Value;
-            if (_numMaxRetries != null)    _settings.MaxRetries = (int)_numMaxRetries.Value;
+            if (_numMaxRetries != null) _settings.MaxRetries = (int)_numMaxRetries.Value;
             if (_chkUseSavedCreds != null)
             {
                 _settings.Username = _chkUseSavedCreds.Checked ? "" : _txtUsername.Text;
                 _settings.Password = _chkUseSavedCreds.Checked ? "" : _txtPassword.Text;
             }
-            if (_chkMinimize != null)       _settings.MinimizeToTray    = _chkMinimize.Checked;
-            if (_chkStartMinimized != null) _settings.StartMinimized    = _chkStartMinimized.Checked;
-            if (_chkAutoStart != null)      _settings.AutoStart         = _chkAutoStart.Checked;
-            if (_numRefresh != null)        _settings.StatusRefreshIntervalSeconds = (int)_numRefresh.Value;
-            if (_chkMonitoring != null)     _settings.ProcessMonitoringEnabled     = _chkMonitoring.Checked;
-            if (_txtProcessName != null)    _settings.MonitoredProcessName         = _txtProcessName.Text.Trim();
-            if (_txtProcessDisplay != null) _settings.MonitoredProcessDisplayName  = _txtProcessDisplay.Text.Trim();
-            if (_cmbTheme != null)          _settings.ThemeMode = (ThemeMode)_cmbTheme.SelectedIndex;
+            if (_chkMinimize != null) _settings.MinimizeToTray = _chkMinimize.Checked;
+            if (_chkStartMinimized != null) _settings.StartMinimized = _chkStartMinimized.Checked;
+            if (_chkAutoStart != null) _settings.AutoStart = _chkAutoStart.Checked;
+            if (_numRefresh != null) _settings.StatusRefreshIntervalSeconds = (int)_numRefresh.Value;
+            if (_chkMonitoring != null) _settings.ProcessMonitoringEnabled = _chkMonitoring.Checked;
+            if (_txtProcessName != null) _settings.MonitoredProcessName = _txtProcessName.Text.Trim();
+            if (_txtProcessDisplay != null) _settings.MonitoredProcessDisplayName = _txtProcessDisplay.Text.Trim();
+            if (_cmbTheme != null) _settings.ThemeMode = (ThemeMode)_cmbTheme.SelectedIndex;
         }
 
         private void RefreshVpnList()
