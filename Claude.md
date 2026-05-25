@@ -159,3 +159,11 @@ This ensures:
 - VPN connection exists and is accessible
 - rasdial command is functional
 - Script files are present and valid
+
+## Health Stack
+
+- typecheck: dotnet build VPNManager/VPNManager.csproj
+- lint: dotnet format VPNManager/VPNManager.csproj --verify-no-changes
+- test: pwsh -Command "& ./Test-VpnSetup.ps1 -SkipAdminCheck -SkipVpnCheck; & ./Test-E2E-Integration.ps1"
+- ps-lint: Invoke-ScriptAnalyzer -Path . -Recurse -IncludeDefaultRules
+- deadcode: skipped (no tool detected)
